@@ -83,14 +83,23 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Fetch { signature } => {
-            let sig = signature.parse()?;
+            let sig = signature
+                .parse()
+                .with_context(|| format!("'{signature}' is not a valid base58 signature"))?;
             let ctx = replay_core::fetch::fetch_full_tx_context(&client, &sig).await?;
+
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&ctx)?);
+                return Ok(());
+            }
+
             println!(
-                "{}  slot={}  accounts={}  logs={}",
+                "{}  slot={}  accounts={}  logs={}  cb_ix={}",
                 ctx.signature.to_string().bright_white(),
                 ctx.slot,
                 ctx.resolved_account_keys.len(),
-                ctx.mainnet_logs.len()
+                ctx.mainnet_logs.len(),
+                ctx.compute_budget_instructions.len(),
             );
             for (i, k) in ctx.resolved_account_keys.iter().enumerate() {
                 println!("  [{:>3}] {}", i.dimmed(), k);
