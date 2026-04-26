@@ -20,6 +20,9 @@ pub mod idl;
 pub mod trace;
 pub mod session;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 pub use error::ReplayError;
 pub use types::{
     AccountDelta, AccountMutation, CpiFrame, FetchedTx, FrameAccount, LogDivergence,

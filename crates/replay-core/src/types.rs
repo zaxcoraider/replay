@@ -82,7 +82,7 @@ pub struct LogDivergence {
 
 /// Output of [`crate::fetch::fetch_full_tx_context`]. Everything you need
 /// to reconstruct state and re-execute.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TxContext {
     pub signature: solana_sdk::signature::Signature,
     pub slot: u64,
@@ -94,7 +94,51 @@ pub struct TxContext {
     pub compute_budget_instructions: Vec<solana_sdk::instruction::CompiledInstruction>,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
+    #[serde(serialize_with = "serialize_account_snapshots")]
     pub pre_account_snapshots: HashMap<Pubkey, Account>,
+}
+
+fn serialize_account_snapshots<S: serde::Serializer>(
+    map: &HashMap<Pubkey, Account>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+    let mut m = s.serialize_map(Some(map.len()))?;
+    for (k, v) in map {
+        m.serialize_entry(&k.to_string(), &SerializableAccount::from(v))?;
+    }
+    m.end()
+}
+
+#[derive(Serialize)]
+struct SerializableAccount<'a> {
+    lamports: u64,
+    #[serde(with = "base64_bytes")]
+    data: &'a [u8],
+    owner: String,
+    executable: bool,
+    rent_epoch: u64,
+}
+
+impl<'a> From<&'a Account> for SerializableAccount<'a> {
+    fn from(a: &'a Account) -> Self {
+        Self {
+            lamports: a.lamports,
+            data: &a.data,
+            owner: a.owner.to_string(),
+            executable: a.executable,
+            rent_epoch: a.rent_epoch,
+        }
+    }
+}
+
+mod base64_bytes {
+    use base64::Engine;
+    use serde::Serializer;
+
+    pub fn serialize<S: Serializer>(bytes: &&[u8], s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&base64::engine::general_purpose::STANDARD.encode(bytes))
+    }
 }
 
 /// Thin DTO around the raw Helius `getTransaction` response. Lives here

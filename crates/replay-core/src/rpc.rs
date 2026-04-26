@@ -227,33 +227,8 @@ impl HeliusClient for HeliusRpcClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A MockHeliusClient you wire up per-test by inserting canned responses.
-    /// Keeps unit tests network-free.
-    #[derive(Default)]
-    pub struct MockHeliusClient {
-        pub txs: std::collections::HashMap<String, FetchedTx>,
-        pub accounts: std::collections::HashMap<Pubkey, Account>,
-    }
-
-    #[async_trait]
-    impl HeliusClient for MockHeliusClient {
-        async fn get_transaction(&self, sig: &Signature) -> Result<Option<FetchedTx>, ReplayError> {
-            Ok(self.txs.get(&sig.to_string()).cloned())
-        }
-
-        async fn get_account_info_at_slot(
-            &self,
-            pubkey: &Pubkey,
-            _slot: u64,
-        ) -> Result<Option<Account>, ReplayError> {
-            Ok(self.accounts.get(pubkey).cloned())
-        }
-
-        async fn get_account_info(&self, pubkey: &Pubkey) -> Result<Option<Account>, ReplayError> {
-            Ok(self.accounts.get(pubkey).cloned())
-        }
-    }
+    use crate::test_support::MockHeliusClient;
+    use crate::types::FetchedTxMeta;
 
     #[tokio::test]
     async fn mock_client_returns_canned_tx() {
