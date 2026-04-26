@@ -168,26 +168,39 @@ If the Jupiter swap diverges and the cause isn't tractable in a few
 hours: consult the **pivot plan** in `prompts/day-02-spike-replay.md`
 ("CU Profiler fallback") rather than romance Day 2 into Day 4.
 
+## Post-Day-2 cleanups landed (audit-driven)
+
+After comparing the implementation against the literal prompt
+contracts, three targeted fixups were committed before the live gate
+run:
+
+- **`fix(core)`** `773a5ea` — `get_account_info_at_slot` now sends
+  `minContextSlot: slot` in the JSON-RPC config (was silently calling
+  the no-slot variant). Refactored to a shared
+  `get_account_info_inner(pubkey, Option<slot>)`; doc comment retains
+  the honest caveat that `minContextSlot` doesn't return historical
+  state — Day 14 (Helius enhanced) revisits.
+- **`feat(core)`** `8efd96d` — added
+  `reconstruct::snapshot_pre_state(state) -> HashMap<Pubkey, Account>`
+  flattening `state.accounts` ∪ program/program-data accounts.
+  Callers (`lib.rs::replay`, `lib.rs::fork`, CLI Replay arm) now
+  populate `ctx.pre_account_snapshots` after `reconstruct_state`
+  returns. `account_deltas` is no longer always empty.
+  `reconstruct_state`'s prompt-mandated `&TxContext` signature is
+  preserved — the merge happens in the caller.
+- **`refactor(core)`** `b7f6994` — folded the last guarded
+  `current_program_stack.pop().unwrap()` in `trace::parse_log_frames`
+  into an `if let Some(program_id) = ...pop()`. Day-1's strict
+  no-unwrap-outside-tests is now honored; verified via grep.
+
 ## Follow-ups (deferred)
 
 1. **Run the live gate.** Single user-side command after populating
    fixtures (see "Validating the gate").
 2. **Capture a real Helius response** for `jupiter-swap-response.json`
    (Day-1 follow-up still open — same `HELIUS_API_KEY` invocation).
-3. **`get_account_info_at_slot` is still a placeholder.** Currently
-   calls `get_account_info` (current state, not historical). For
-   recent txs (<~few hours) this works because state hasn't changed;
-   for older txs it'll silently produce wrong results. Day-2 prompt
-   §"slot semantics" + Day-14 (Helius integration) revisit this with
-   the Enhanced Transactions API.
-4. **`return_data` in `ExecutionResult`** is captured but trace.rs's
+3. **`return_data` in `ExecutionResult`** is captured but trace.rs's
    `build_trace` doesn't surface it on frames yet — Day-4 work.
-5. **`account_deltas`** are computed against `ctx.pre_account_snapshots`
-   which is empty after Day-1's `fetch_full_tx_context`. Reconstruct
-   should populate it (it has the data — it's the same accounts), but
-   currently doesn't. **Easy Day-3 cleanup**: have `reconstruct_state`
-   write its `accounts` map back into `ctx.pre_account_snapshots` so
-   deltas are non-empty.
 
 ## Next session bootstrap (Day 3)
 
@@ -216,6 +229,10 @@ but `AccountDecoder::decode` returns `NoIdl` unconditionally today.
 ## Commits
 
 ```
+b7f6994 refactor(core): drop guarded .unwrap() in trace.rs frame popper
+8efd96d feat(core): populate pre_account_snapshots from reconstructed state
+773a5ea fix(core): pass minContextSlot in get_account_info_at_slot
+732461c docs: memory/day-02 snapshot
 2cda1a8 test(core): live integration test for canonical replay sigs
 d04bf9c feat(cli): Day-2 step-by-step replay output
 fc4bf30 docs: project README + memory/day-01 snapshot
