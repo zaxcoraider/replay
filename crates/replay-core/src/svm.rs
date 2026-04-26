@@ -13,7 +13,6 @@ use solana_sdk::{
     account::Account,
     clock::Clock,
     pubkey::Pubkey,
-    transaction::VersionedTransaction,
 };
 use std::collections::HashMap;
 use tracing::{debug, info};

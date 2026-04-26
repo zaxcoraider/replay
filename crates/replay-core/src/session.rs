@@ -7,7 +7,7 @@
 use crate::error::ReplayError;
 use crate::idl::{AccountDecoder, IdlCache};
 use crate::rpc::HeliusClient;
-use crate::svm::{replay_from_scratch, ExecutionResult};
+use crate::svm::replay_from_scratch;
 use crate::trace::build_trace;
 use crate::types::{AccountMutation, ReconstructedState, Trace, TraceDiff, TxContext};
 use solana_sdk::{account::Account, pubkey::Pubkey};
