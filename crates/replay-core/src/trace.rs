@@ -51,32 +51,33 @@ fn parse_log_frames(logs: &[String], ctx: &TxContext) -> Vec<CpiFrame> {
             current_logs_by_depth[depth as usize].clear();
         } else if parse_success_or_failure(line).is_some() {
             // Pop frame
-            if depth == 1 && !current_program_stack.is_empty() {
-                let program_id = current_program_stack.pop().unwrap();
-                frames.push(CpiFrame {
-                    depth: 0,
-                    program_id,
-                    program_name: None,
-                    instruction_index: frames.len(),
-                    instruction_name: None,
-                    accounts: Vec::new(),
-                    data_hex: String::new(),
-                    decoded_args: None,
-                    logs: std::mem::take(&mut current_logs_by_depth[depth as usize]),
-                    cu_consumed: parse_cu_consumed(line).unwrap_or(0),
-                    cu_remaining_after: 0,
-                    children: Vec::new(),
-                    result: if line.contains("success") {
-                        TxResult::Success
-                    } else {
-                        TxResult::Failure {
-                            error: line.clone(),
-                            error_code: None,
-                        }
-                    },
-                    return_data: None,
-                });
-            } else if !current_program_stack.is_empty() {
+            if depth == 1 {
+                if let Some(program_id) = current_program_stack.pop() {
+                    frames.push(CpiFrame {
+                        depth: 0,
+                        program_id,
+                        program_name: None,
+                        instruction_index: frames.len(),
+                        instruction_name: None,
+                        accounts: Vec::new(),
+                        data_hex: String::new(),
+                        decoded_args: None,
+                        logs: std::mem::take(&mut current_logs_by_depth[depth as usize]),
+                        cu_consumed: parse_cu_consumed(line).unwrap_or(0),
+                        cu_remaining_after: 0,
+                        children: Vec::new(),
+                        result: if line.contains("success") {
+                            TxResult::Success
+                        } else {
+                            TxResult::Failure {
+                                error: line.clone(),
+                                error_code: None,
+                            }
+                        },
+                        return_data: None,
+                    });
+                }
+            } else {
                 current_program_stack.pop();
             }
             if depth > 0 {
