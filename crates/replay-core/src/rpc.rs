@@ -153,36 +153,48 @@ impl HeliusClient for HeliusRpcClient {
         pubkey: &Pubkey,
         slot: u64,
     ) -> Result<Option<Account>, ReplayError> {
-        // NOTE: `minContextSlot` does NOT give you historical state — it
-        // asserts the node has observed the slot. For TRUE historical state
-        // at a specific slot, we rely on Helius's enhanced APIs or on the
-        // fact that for most replays (<~90 days), current state is close
-        // enough to pre-state once we replay the tx from pre-balances.
-        //
-        // This is where we'd hook in Helius's "Enhanced Transaction History"
-        // or `getAccountInfoAtSlot` if/when available. For now we use current
-        // state as best-effort and surface divergences in the trace.
-        //
-        // See docs/04-solana-gotchas.md section 12 for the full explanation.
-        let _ = slot; // intentionally unused for now
-
-        self.get_account_info(pubkey).await
+        // Honors the Day-1 contract: pass `minContextSlot: slot` to the RPC.
+        // CAVEAT: `minContextSlot` does NOT actually return historical state
+        // — it asserts the node has observed the given slot before answering.
+        // For TRUE historical state we rely on Helius enhanced APIs (Day 14)
+        // or on the fact that for recent txs (<~few hours) current state is
+        // close enough. See docs/04-solana-gotchas.md §12.
+        self.get_account_info_inner(pubkey, Some(slot)).await
     }
 
     #[tracing::instrument(skip(self))]
     async fn get_account_info(&self, pubkey: &Pubkey) -> Result<Option<Account>, ReplayError> {
-        let params = json!([
-            pubkey.to_string(),
-            { "encoding": "base64", "commitment": "confirmed" }
-        ]);
+        self.get_account_info_inner(pubkey, None).await
+    }
+}
+
+impl HeliusRpcClient {
+    async fn get_account_info_inner(
+        &self,
+        pubkey: &Pubkey,
+        min_context_slot: Option<u64>,
+    ) -> Result<Option<Account>, ReplayError> {
+        let mut config = serde_json::Map::new();
+        config.insert("encoding".into(), Value::String("base64".into()));
+        config.insert("commitment".into(), Value::String("confirmed".into()));
+        if let Some(slot) = min_context_slot {
+            config.insert(
+                "minContextSlot".into(),
+                Value::Number(serde_json::Number::from(slot)),
+            );
+        }
+
+        let params = json!([pubkey.to_string(), Value::Object(config)]);
 
         let raw = self.json_rpc("getAccountInfo", params).await?;
-        let value = raw.get("value");
-        if value.is_none() || value.unwrap().is_null() {
-            debug!(?pubkey, "account not found");
-            return Ok(None);
-        }
-        let v = value.unwrap();
+
+        let v = match raw.get("value") {
+            Some(v) if !v.is_null() => v,
+            _ => {
+                debug!(?pubkey, "account not found");
+                return Ok(None);
+            }
+        };
 
         let lamports = v
             .get("lamports")
