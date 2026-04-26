@@ -72,14 +72,80 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Replay { signature, diff_logs } => {
-            let trace = replay_core::replay(&signature, &client).await?;
-
+            // JSON path: keep using the one-shot replay() for SDK parity.
             if cli.json {
+                let trace = replay_core::replay(&signature, &client).await?;
                 println!("{}", serde_json::to_string_pretty(&trace)?);
                 return Ok(());
             }
 
-            print_trace_pretty(&trace, diff_logs);
+            // Pretty path: orchestrate step-by-step so we can stream
+            // ✓-prefixed progress lines as each phase completes.
+            let sig = signature
+                .parse()
+                .with_context(|| format!("'{signature}' is not a valid base58 signature"))?;
+
+            let ctx = replay_core::fetch::fetch_full_tx_context(&client, &sig).await?;
+            println!(
+                "{} Fetched tx from Helius (slot {})",
+                "✓".green(),
+                ctx.slot
+            );
+
+            let state = replay_core::reconstruct::reconstruct_state(&client, &ctx).await?;
+            println!(
+                "{} Reconstructed state: {} accounts, {} programs",
+                "✓".green(),
+                state.accounts.len(),
+                state.programs.len()
+            );
+
+            let mut runner = replay_core::svm::SvmRunner::new();
+            runner.seed(&state)?;
+            runner.set_clock_for_slot(ctx.slot, ctx.block_time);
+            println!("{} Loaded into LiteSVM", "✓".green());
+
+            let execution = runner.execute(&ctx)?;
+            match &execution.result {
+                replay_core::TxResult::Success => {
+                    println!("{} Replayed successfully", "✓".green());
+                }
+                replay_core::TxResult::Failure { error, .. } => {
+                    println!("{} Replay failed — {}", "✓".yellow(), error.dimmed());
+                }
+            }
+
+            // Compare logs
+            let mainnet = &ctx.mainnet_logs;
+            let replay_logs = &execution.logs;
+            let matched = mainnet
+                .iter()
+                .zip(replay_logs.iter())
+                .take_while(|(m, r)| m == r)
+                .count();
+            let total = mainnet.len().max(replay_logs.len());
+            if matched == mainnet.len() && mainnet.len() == replay_logs.len() {
+                println!(
+                    "{} Logs match mainnet: {}/{} lines identical",
+                    "✓".green(),
+                    matched,
+                    total
+                );
+            } else {
+                println!(
+                    "{} Logs diverge at line {} ({}/{} matched)",
+                    "✗".red(),
+                    matched + 1,
+                    matched,
+                    total
+                );
+            }
+
+            println!("Total CU consumed: {}", format_underscores(execution.cu_consumed));
+
+            if diff_logs && matched < total {
+                print_log_diff(mainnet, replay_logs);
+            }
         }
 
         Commands::Fetch { signature } => {
@@ -127,46 +193,32 @@ fn build_client(rpc: Option<&str>) -> anyhow::Result<replay_core::HeliusRpcClien
     Ok(client)
 }
 
-fn print_trace_pretty(trace: &replay_core::Trace, diff_logs: bool) {
-    println!(
-        "{}  {}  slot={}",
-        "Replay".bright_green().bold(),
-        trace.signature.bright_white(),
-        trace.slot
-    );
-
-    println!("  mainnet: {:?}", trace.mainnet_result);
-    println!("  replay:  {:?}", trace.replay_result);
-    println!("  total CU: {}", trace.total_cu);
+fn print_log_diff(mainnet: &[String], replay: &[String]) {
     println!();
-
-    for (i, frame) in trace.frames.iter().enumerate() {
-        let status = match &frame.result {
-            replay_core::TxResult::Success => "✓".green().to_string(),
-            replay_core::TxResult::Failure { .. } => "✗".red().to_string(),
-        };
-        println!(
-            "  [{}] {} {}  {} CU",
-            i.dimmed(),
-            status,
-            frame.program_id.bright_cyan(),
-            frame.cu_consumed
-        );
-    }
-
-    if diff_logs {
-        if let Some(div) = &trace.log_divergence {
-            println!();
-            println!("{}", "Log divergence detected".red().bold());
-            println!("  first diff at line {}", div.first_divergent_line);
-            println!("    mainnet:  {}", div.mainnet_line.yellow());
-            println!("    replay:   {}", div.replay_line.yellow());
-            if let Some(cause) = &div.suspected_cause {
-                println!("    suspect:  {}", cause.dimmed());
-            }
+    println!("{}", "Log diff (mainnet vs replay)".bold());
+    let max = mainnet.len().max(replay.len());
+    for i in 0..max {
+        let m = mainnet.get(i).map(String::as_str).unwrap_or("<missing>");
+        let r = replay.get(i).map(String::as_str).unwrap_or("<missing>");
+        if m == r {
+            println!("  {:>3} {} {}", i + 1, "=".dimmed(), m.dimmed());
         } else {
-            println!();
-            println!("{}", "Logs match mainnet ✓".green());
+            println!("  {:>3} {} {}", i + 1, "-".red(), m.red());
+            println!("      {} {}", "+".green(), r.green());
         }
     }
+}
+
+/// Format a u64 with underscore thousands separators: 842119 -> "842_119".
+fn format_underscores(n: u64) -> String {
+    let s = n.to_string();
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len() + s.len() / 3);
+    for (i, b) in bytes.iter().enumerate() {
+        if i > 0 && (bytes.len() - i) % 3 == 0 {
+            out.push('_');
+        }
+        out.push(*b as char);
+    }
+    out
 }
