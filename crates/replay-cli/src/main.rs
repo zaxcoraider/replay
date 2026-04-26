@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
                 .parse()
                 .with_context(|| format!("'{signature}' is not a valid base58 signature"))?;
 
-            let ctx = replay_core::fetch::fetch_full_tx_context(&client, &sig).await?;
+            let mut ctx = replay_core::fetch::fetch_full_tx_context(&client, &sig).await?;
             println!(
                 "{} Fetched tx from Helius (slot {})",
                 "✓".green(),
@@ -93,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
             );
 
             let state = replay_core::reconstruct::reconstruct_state(&client, &ctx).await?;
+            ctx.pre_account_snapshots = replay_core::reconstruct::snapshot_pre_state(&state);
             println!(
                 "{} Reconstructed state: {} accounts, {} programs",
                 "✓".green(),

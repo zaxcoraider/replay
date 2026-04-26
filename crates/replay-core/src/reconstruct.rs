@@ -70,6 +70,25 @@ pub async fn reconstruct_state<C: HeliusClient>(
     Ok(ReconstructedState { accounts, programs })
 }
 
+/// Flatten reconstructed state into a single `Pubkey -> Account` map, including
+/// program accounts and (for upgradeable programs) their program-data accounts.
+///
+/// Used to populate `TxContext::pre_account_snapshots` after reconstruction so
+/// `trace::build_deltas` can produce non-empty `account_deltas` without
+/// changing the prompt-mandated `&TxContext` signature on `reconstruct_state`.
+pub fn snapshot_pre_state(state: &ReconstructedState) -> HashMap<Pubkey, Account> {
+    let mut map = state.accounts.clone();
+    for (program_id, info) in &state.programs {
+        map.insert(*program_id, info.program_account.clone());
+        if let (Some(pda), Some(da)) =
+            (info.program_data_address, info.program_data_account.as_ref())
+        {
+            map.insert(pda, da.clone());
+        }
+    }
+    map
+}
+
 async fn fetch_program_info<C: HeliusClient>(
     client: &C,
     program_id: &Pubkey,

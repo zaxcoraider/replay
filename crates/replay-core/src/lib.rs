@@ -46,8 +46,9 @@ pub async fn replay<C: HeliusClient>(
     let sig = Signature::from_str(signature)
         .map_err(|_| ReplayError::InvalidSignature(signature.to_string()))?;
 
-    let ctx = fetch::fetch_full_tx_context(client, &sig).await?;
+    let mut ctx = fetch::fetch_full_tx_context(client, &sig).await?;
     let state = reconstruct::reconstruct_state(client, &ctx).await?;
+    ctx.pre_account_snapshots = reconstruct::snapshot_pre_state(&state);
 
     let mut runner = svm::SvmRunner::new();
     runner.seed(&state)?;
@@ -74,8 +75,9 @@ pub async fn fork<C: HeliusClient>(
     let sig = Signature::from_str(signature)
         .map_err(|_| ReplayError::InvalidSignature(signature.to_string()))?;
 
-    let ctx = fetch::fetch_full_tx_context(client, &sig).await?;
+    let mut ctx = fetch::fetch_full_tx_context(client, &sig).await?;
     let state = reconstruct::reconstruct_state(client, &ctx).await?;
+    ctx.pre_account_snapshots = reconstruct::snapshot_pre_state(&state);
 
     ForkedSession::new(ctx, state).await
 }
