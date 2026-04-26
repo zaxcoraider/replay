@@ -1,0 +1,19 @@
+# Canonical replay-test signatures.
+#
+# Format: one entry per line — `<label>=<base58_signature>`. Empty lines
+# and lines starting with `#` are ignored. The label is a free-form tag
+# the live test uses to identify the case in failure messages.
+#
+# The live test (live_replay_canonical_sigs) is gated on
+# REPLAY_LIVE_TESTS=1 + HELIUS_API_KEY and runs each non-PLACEHOLDER
+# entry below. Replace the placeholders with real recent signatures
+# before enabling.
+#
+# Order matters — first must work, second must work, third is the gate:
+#   1. SOL transfer (SystemProgram only) — simplest case.
+#   2. SPL Token transfer — small, deterministic.
+#   3. Jupiter v6 swap — the real go/no-go gate (LUT-heavy, multi-CPI).
+
+sol_transfer=PLACEHOLDER_SOL_TRANSFER_SIG
+spl_token_transfer=PLACEHOLDER_SPL_TOKEN_TRANSFER_SIG
+jupiter_v6_swap=PLACEHOLDER_JUPITER_V6_SWAP_SIG
