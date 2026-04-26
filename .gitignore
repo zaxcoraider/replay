@@ -1,0 +1,47 @@
+# Rust
+/target
+/crates/*/target
+**/*.rs.bk
+Cargo.lock.old
+
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# IDL / local caches
+.replay/
+/tmp/
+
+# Node (web/)
+web/node_modules
+web/.next
+web/out
+web/.turbo
+web/.vercel
+
+# Package outputs
+packages/**/dist
+packages/**/.turbo
+
+# OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json.sample
+.claude/settings.local.json
+
+# Hackathon workflow — don't commit submission bundles
+submissions/
+docs/progress/*.mp4
+docs/progress/*.mov
+
+# Build artifacts we don't want checked in
+*.so
+*.wasm
