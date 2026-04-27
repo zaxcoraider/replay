@@ -44,33 +44,44 @@ impl SvmRunner {
     }
 
     /// Seed the SVM with reconstructed state. Called once per session.
+    ///
+    /// Order matters: program-data accounts are seeded BEFORE their owning
+    /// program accounts. litesvm's `set_account` eagerly links upgradeable
+    /// programs against their `programdata_address` and rejects with
+    /// `Instruction(MissingAccount)` if the program-data isn't already in
+    /// the SVM. We do non-program accounts + all program-data first, then
+    /// the program stubs last.
     #[tracing::instrument(skip(self, state))]
     pub fn seed(&mut self, state: &ReconstructedState) -> Result<(), ReplayError> {
+        // Pass 1: every non-program account.
         for (pubkey, account) in &state.accounts {
             self.svm
                 .set_account(*pubkey, account.clone())
                 .map_err(|e| ReplayError::Execution(format!("set_account {pubkey}: {e:?}")))?;
         }
 
+        // Pass 2: program-data accounts (the bytecode side of upgradeable
+        // programs). Must precede the program account itself.
         for (program_id, info) in &state.programs {
-            // Set the program account itself.
+            if let (Some(pda), Some(data_acc)) =
+                (info.program_data_address, &info.program_data_account)
+            {
+                self.svm.set_account(pda, data_acc.clone()).map_err(|e| {
+                    ReplayError::Execution(format!(
+                        "set_account program_data {pda} (for program {program_id}): {e:?}"
+                    ))
+                })?;
+            }
+        }
+
+        // Pass 3: program accounts. With program-data already present, the
+        // upgradeable loader linkage resolves cleanly.
+        for (program_id, info) in &state.programs {
             self.svm
                 .set_account(*program_id, info.program_account.clone())
                 .map_err(|e| {
                     ReplayError::Execution(format!("set_account program {program_id}: {e:?}"))
                 })?;
-
-            // For upgradeable, also set the program-data account. litesvm's
-            // loader reads both.
-            if let (Some(pda), Some(data_acc)) =
-                (info.program_data_address, &info.program_data_account)
-            {
-                self.svm
-                    .set_account(pda, data_acc.clone())
-                    .map_err(|e| {
-                        ReplayError::Execution(format!("set_account program_data {pda}: {e:?}"))
-                    })?;
-            }
         }
 
         debug!(

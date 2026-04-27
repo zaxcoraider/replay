@@ -10,7 +10,15 @@
 use crate::error::ReplayError;
 use crate::rpc::HeliusClient;
 use crate::types::{ProgramInfo, ProgramLoader, ReconstructedState, TxContext};
-use solana_sdk::{account::Account, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, native_loader, pubkey::Pubkey};
+use solana_sdk::{
+    account::Account,
+    bpf_loader,
+    bpf_loader_deprecated,
+    bpf_loader_upgradeable,
+    message::VersionedMessage,
+    native_loader,
+    pubkey::Pubkey,
+};
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
 
@@ -23,28 +31,19 @@ pub async fn reconstruct_state<C: HeliusClient>(
     client: &C,
     ctx: &TxContext,
 ) -> Result<ReconstructedState, ReplayError> {
+    let fetch_slot = ctx.slot.saturating_sub(1);
     let mut accounts: HashMap<Pubkey, Account> = HashMap::new();
     let mut programs: HashMap<Pubkey, ProgramInfo> = HashMap::new();
 
-    // Collect program ids referenced in the instructions.
-    let mut program_ids: Vec<Pubkey> = Vec::new();
-    for ci in ctx.original_tx.message.instructions() {
-        let idx = ci.program_id_index as usize;
-        if idx < ctx.resolved_account_keys.len() {
-            let pid = ctx.resolved_account_keys[idx];
-            if !program_ids.contains(&pid) {
-                program_ids.push(pid);
-            }
-        }
-    }
-    info!(program_count = program_ids.len(), "programs referenced");
-
-    // --- 1. Fetch all non-program accounts at the historical slot --- //
-    let fetch_slot = ctx.slot.saturating_sub(1);
+    // --- Pass 1: fetch every resolved account at slot-1 --- //
+    //
+    // Don't pre-classify by walking instructions — that misses programs
+    // invoked via CPI (Token-2022 from a Jupiter swap is the canonical
+    // example: it's never a top-level instruction's program_id_index but
+    // appears in resolved_account_keys because the runtime needs it
+    // accessible to satisfy CPI account constraints). Post-classification
+    // by `account.executable && owner == loader` catches all of them.
     for pubkey in &ctx.resolved_account_keys {
-        if program_ids.contains(pubkey) {
-            continue; // handled separately
-        }
         match client.get_account_info_at_slot(pubkey, fetch_slot).await? {
             Some(account) => {
                 accounts.insert(*pubkey, account);
@@ -56,16 +55,126 @@ pub async fn reconstruct_state<C: HeliusClient>(
             }
         }
     }
-    info!(account_count = accounts.len(), "reconstructed non-program accounts");
+    info!(fetched = accounts.len(), "fetched accounts at slot-1");
 
-    // --- 2. Fetch each program's bytecode at the historical slot --- //
-    for program_id in &program_ids {
-        let info = fetch_program_info(client, program_id, fetch_slot).await?;
-        if let Some(i) = info {
-            programs.insert(*program_id, i);
+    // --- Pass 1b: fetch every Address Lookup Table account itself --- //
+    //
+    // resolved_account_keys covers what the LUTs *resolve to*; it does NOT
+    // include the ALT accounts that hold those addresses. litesvm's V0-message
+    // path resolves lookups against its own account store at execute time,
+    // so each `address_table_lookups[].account_key` must be seeded too. The
+    // spike (spikes/spike-replay.rs) catches this with `needed.insert(account_key)`.
+    if let VersionedMessage::V0(v0) = &ctx.original_tx.message {
+        for atl in &v0.address_table_lookups {
+            if accounts.contains_key(&atl.account_key) {
+                continue;
+            }
+            match client
+                .get_account_info_at_slot(&atl.account_key, fetch_slot)
+                .await?
+            {
+                Some(account) => {
+                    accounts.insert(atl.account_key, account);
+                }
+                None => {
+                    return Err(ReplayError::LutResolution {
+                        lut: atl.account_key.to_string(),
+                        detail: format!("ALT account not found at slot {fetch_slot}"),
+                    });
+                }
+            }
+        }
+        if !v0.address_table_lookups.is_empty() {
+            info!(
+                lut_count = v0.address_table_lookups.len(),
+                "fetched LUT lookup tables"
+            );
         }
     }
-    info!(program_count = programs.len(), "reconstructed programs");
+
+    // --- Pass 2: classify each fetched account; pull program-data when
+    //             upgradeable; route programs to their own map. --- //
+    let candidates: Vec<(Pubkey, Account)> = accounts
+        .iter()
+        .filter(|(_, a)| a.executable)
+        .map(|(k, v)| (*k, v.clone()))
+        .collect();
+
+    for (program_id, program_account) in candidates {
+        let loader = classify_loader(&program_account.owner);
+
+        // Native programs are built into litesvm; remove from accounts and
+        // don't insert into programs (litesvm rejects overrides on builtins).
+        if matches!(loader, ProgramLoader::Native) {
+            accounts.remove(&program_id);
+            continue;
+        }
+
+        // Move from accounts → programs
+        accounts.remove(&program_id);
+
+        let info = match loader {
+            ProgramLoader::BpfLoader | ProgramLoader::BpfLoaderDeprecated => ProgramInfo {
+                program_account,
+                program_data_address: None,
+                program_data_account: None,
+                loader,
+            },
+
+            ProgramLoader::BpfLoaderUpgradeable => {
+                let data = &program_account.data;
+                if data.len() < 36 {
+                    return Err(ReplayError::StateReconstruction {
+                        step: "parse_program_data_address".into(),
+                        detail: format!(
+                            "upgradeable program {} account too short: len={}",
+                            program_id,
+                            data.len()
+                        ),
+                    });
+                }
+                let pda = Pubkey::try_from(&data[4..36]).map_err(|e| {
+                    ReplayError::StateReconstruction {
+                        step: "parse_program_data_address".into(),
+                        detail: format!("pubkey parse for {program_id}: {e:?}"),
+                    }
+                })?;
+                let pda_account = client
+                    .get_account_info_at_slot(&pda, fetch_slot)
+                    .await?
+                    .ok_or_else(|| ReplayError::MissingProgramBytecode {
+                        program_id: pda.to_string(),
+                        slot: fetch_slot,
+                    })?;
+                ProgramInfo {
+                    program_account,
+                    program_data_address: Some(pda),
+                    program_data_account: Some(pda_account),
+                    loader,
+                }
+            }
+
+            ProgramLoader::LoaderV4 => {
+                warn!(?program_id, "LoaderV4 support is experimental — verify replay fidelity");
+                ProgramInfo {
+                    program_account,
+                    program_data_address: None,
+                    program_data_account: None,
+                    loader,
+                }
+            }
+
+            ProgramLoader::Native => unreachable!("filtered out above"),
+        };
+
+        programs.insert(program_id, info);
+    }
+
+    info!(
+        accounts = accounts.len(),
+        programs = programs.len(),
+        "reconstructed state"
+    );
 
     Ok(ReconstructedState { accounts, programs })
 }
@@ -87,87 +196,6 @@ pub fn snapshot_pre_state(state: &ReconstructedState) -> HashMap<Pubkey, Account
         }
     }
     map
-}
-
-async fn fetch_program_info<C: HeliusClient>(
-    client: &C,
-    program_id: &Pubkey,
-    slot: u64,
-) -> Result<Option<ProgramInfo>, ReplayError> {
-    let Some(program_account) = client.get_account_info_at_slot(program_id, slot).await? else {
-        return Err(ReplayError::MissingProgramBytecode {
-            program_id: program_id.to_string(),
-            slot,
-        });
-    };
-
-    let loader = classify_loader(&program_account.owner);
-
-    match loader {
-        // Native programs: litesvm has them built in; nothing to fetch.
-        ProgramLoader::Native => {
-            debug!(?program_id, "native program; skipping bytecode fetch");
-            Ok(None)
-        }
-
-        // Legacy BPF loader: bytecode lives in the program account's data.
-        ProgramLoader::BpfLoader | ProgramLoader::BpfLoaderDeprecated => {
-            Ok(Some(ProgramInfo {
-                program_account,
-                program_data_address: None,
-                program_data_account: None,
-                loader,
-            }))
-        }
-
-        // Upgradeable loader: parse the program-data pointer and fetch that.
-        ProgramLoader::BpfLoaderUpgradeable => {
-            let data = &program_account.data;
-            // Layout: enum tag (4 bytes) + pubkey (32 bytes)
-            if data.len() < 36 {
-                return Err(ReplayError::StateReconstruction {
-                    step: "parse_program_data_address".into(),
-                    detail: format!(
-                        "upgradeable program account too short: len={}",
-                        data.len()
-                    ),
-                });
-            }
-            let program_data_address = Pubkey::try_from(&data[4..36]).map_err(|e| {
-                ReplayError::StateReconstruction {
-                    step: "parse_program_data_address".into(),
-                    detail: format!("pubkey parse: {e:?}"),
-                }
-            })?;
-
-            let program_data_account = client
-                .get_account_info_at_slot(&program_data_address, slot)
-                .await?
-                .ok_or_else(|| ReplayError::MissingProgramBytecode {
-                    program_id: program_data_address.to_string(),
-                    slot,
-                })?;
-
-            Ok(Some(ProgramInfo {
-                program_account,
-                program_data_address: Some(program_data_address),
-                program_data_account: Some(program_data_account),
-                loader,
-            }))
-        }
-
-        // LoaderV4: bytecode lives after a header in the program account
-        // itself. Handled at seed time by litesvm.
-        ProgramLoader::LoaderV4 => {
-            warn!(?program_id, "LoaderV4 support is experimental — verify replay fidelity");
-            Ok(Some(ProgramInfo {
-                program_account,
-                program_data_address: None,
-                program_data_account: None,
-                loader,
-            }))
-        }
-    }
 }
 
 fn classify_loader(owner: &Pubkey) -> ProgramLoader {
