@@ -6,14 +6,13 @@
 #
 # The live test (live_replay_canonical_sigs) is gated on
 # REPLAY_LIVE_TESTS=1 + HELIUS_API_KEY and runs each non-PLACEHOLDER
-# entry below. Replace the placeholders with real recent signatures
-# before enabling.
+# entry below.
 #
 # Order matters — first must work, second must work, third is the gate:
-#   1. SOL transfer (SystemProgram only) — simplest case.
+#   1. SOL transfer (System Program) — simplest case.
 #   2. SPL Token transfer — small, deterministic.
 #   3. Jupiter v6 swap — the real go/no-go gate (LUT-heavy, multi-CPI).
 
-sol_transfer=PLACEHOLDER_SOL_TRANSFER_SIG
-spl_token_transfer=PLACEHOLDER_SPL_TOKEN_TRANSFER_SIG
-jupiter_v6_swap=PLACEHOLDER_JUPITER_V6_SWAP_SIG
+sol_transfer=5zayg636jcxCSS43y94UZrxPDzjdD4CPtFYNCjfcvENr53jezr7qhnKT8ZWeEJnAXQvAHxQYW54uHc7XAj5ndMhr
+spl_token_transfer=5eHx4KKkiFdGnzkhB6GrPUNHGXzATPZguJBMqhBXDq3zZUm46sk6gJkFyt3qFV4DT7a53shpKAKFaVCP39s4Qw7B
+jupiter_v6_swap=3dqwCn4AnLAYVbtdVu31DADDUyt4qgm3djYDsFUAXWDK5nNUFehNhti25Zh3fdV7J8LizsuxvBDhtNnTAoHCVetq

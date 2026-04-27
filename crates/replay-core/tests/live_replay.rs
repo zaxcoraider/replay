@@ -12,6 +12,14 @@ use replay_core::{replay, HeliusRpcClient, TxResult};
 #[tokio::test]
 #[ignore]
 async fn live_replay_canonical_sigs() {
+    // Pick up HELIUS_API_KEY from the workspace-root .env when one exists,
+    // so the user can run the gate without exporting env vars manually.
+    let _ = dotenvy::from_path(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(".env"),
+    );
+
     if std::env::var("REPLAY_LIVE_TESTS").is_err() {
         eprintln!("REPLAY_LIVE_TESTS not set; skipping");
         return;

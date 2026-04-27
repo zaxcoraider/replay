@@ -45,3 +45,4 @@ ulid = { workspace = true }
 tokio-test = { workspace = true }
 mockito = { workspace = true }
 tracing-subscriber = { workspace = true }
+dotenvy = "0.15"

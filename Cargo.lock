@@ -3088,6 +3088,7 @@ dependencies = [
  "bincode",
  "borsh 1.6.1",
  "bs58",
+ "dotenvy",
  "flate2",
  "hex",
  "litesvm",
