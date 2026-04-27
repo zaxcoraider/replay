@@ -10,26 +10,26 @@ Built for the Colosseum Frontier 2026 hackathon. MIT-licensed from day 1.
 
 ## Status
 
-Day 2 of 18 — full replay pipeline runs end-to-end against mainnet.
-`fetch → reconstruct → seed → execute → trace` works through the
-Cargo workspace; CPI-invoked programs and Address Lookup Table
-accounts are seeded correctly; the integrated path passed
-infrastructure validation against three real signatures (no
-`MissingAccount` / `AddressLookupTableNotFound` / fetch errors).
-Faithful-replay caveats (state drift on volatile accounts, 107-CU
-remaining-budget drift on token transfers) are documented in
-[`memory/day-02.md`](memory/day-02.md) — not Day-2 blockers; revisited
-in Day 14 (Helius enhanced APIs).
+Day 3 of 18 — IDL-aware account decoder lives. `Trace.account_deltas`
+now carries `decoded_before` / `decoded_after` / `idl_type_name`.
+Three resolution layers: hand-written native decoders (SPL Token,
+Token-2022, System) → bundled IDLs in `assets/idls/` (Jupiter v6,
+Whirlpool, Drift v2, Kamino Lending pre-fetched, ~900 KB total) →
+on-disk cache (`~/.replay/idl-cache/`, 7-day TTL) → on-chain Anchor
+IDL fetched at the canonical PDA, zlib-decompressed. Failures degrade
+gracefully through the `DecodedAccount` enum — never `Err`. See
+[`memory/day-03.md`](memory/day-03.md) for the full snapshot.
 
 The standalone spike at [`spikes/spike-replay.rs`](spikes/spike-replay.rs)
-remains as reference for the proven approach.
+remains as reference for the proven replay approach.
 
 | Day | Topic | State |
 |----:|-------|-------|
 |  1  | Fetch a tx + resolve LUTs + extract compute-budget | done |
 |  2  | Replay in litesvm + reconstruct historical state + log diff | done |
-|  3  | IDL-aware account decoder | next |
-| 4-18 | Trace tree → fork/mutate → UI → CLI → SDK → submission | planned |
+|  3  | IDL-aware account decoder + bundled IDLs | done |
+|  4  | Trace tree (CPI nesting + per-frame CU + IDL-decoded args) | next |
+| 5-18 | Fork/mutate → UI → CLI → SDK → submission | planned |
 
 ## Repo layout
 
