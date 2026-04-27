@@ -10,17 +10,26 @@ Built for the Colosseum Frontier 2026 hackathon. MIT-licensed from day 1.
 
 ## Status
 
-Day 1 of 18 — fetch path complete. See [`memory/day-01.md`](memory/day-01.md)
-for the full status snapshot. The standalone spike at
-[`spikes/spike-replay.rs`](spikes/spike-replay.rs) already demonstrates the
-full pipeline end-to-end against mainnet (fetch → state reconstruct → litesvm
-replay → log diff).
+Day 2 of 18 — full replay pipeline runs end-to-end against mainnet.
+`fetch → reconstruct → seed → execute → trace` works through the
+Cargo workspace; CPI-invoked programs and Address Lookup Table
+accounts are seeded correctly; the integrated path passed
+infrastructure validation against three real signatures (no
+`MissingAccount` / `AddressLookupTableNotFound` / fetch errors).
+Faithful-replay caveats (state drift on volatile accounts, 107-CU
+remaining-budget drift on token transfers) are documented in
+[`memory/day-02.md`](memory/day-02.md) — not Day-2 blockers; revisited
+in Day 14 (Helius enhanced APIs).
+
+The standalone spike at [`spikes/spike-replay.rs`](spikes/spike-replay.rs)
+remains as reference for the proven approach.
 
 | Day | Topic | State |
 |----:|-------|-------|
 |  1  | Fetch a tx + resolve LUTs + extract compute-budget | done |
-|  2  | Spike replay in litesvm against historical state | next |
-| 3-18 | IDL decoder → trace tree → fork/mutate → UI → CLI → SDK → submission | planned |
+|  2  | Replay in litesvm + reconstruct historical state + log diff | done |
+|  3  | IDL-aware account decoder | next |
+| 4-18 | Trace tree → fork/mutate → UI → CLI → SDK → submission | planned |
 
 ## Repo layout
 
@@ -53,12 +62,14 @@ cp .env.example .env
 # 2. Build
 cargo build
 
-# 3. Fetch a tx (Day-1: parses the tx + resolves LUTs, no replay yet)
+# 3. Fetch a tx (parse + resolve LUTs + extract compute-budget; no replay)
 cargo run -p replay-cli -- fetch <SIGNATURE>          # pretty summary
 cargo run -p replay-cli -- fetch <SIGNATURE> --json   # full TxContext JSON
 
-# 4. (Day-2+) Replay a tx
-cargo run -p replay-cli -- replay <SIGNATURE>
+# 4. Replay a tx end-to-end against historical state
+cargo run -p replay-cli -- replay <SIGNATURE>             # ✓ progress + log match
+cargo run -p replay-cli -- replay <SIGNATURE> --diff-logs # side-by-side log diff
+cargo run -p replay-cli -- replay <SIGNATURE> --json      # full Trace JSON
 ```
 
 ## Development
@@ -73,10 +84,14 @@ cargo fmt
 ### Live (network) tests
 
 ```bash
-# After populating tests/fixtures/demo-signature.txt with a real Jupiter swap sig:
-REPLAY_LIVE_TESTS=1 HELIUS_API_KEY=... cargo test -p replay-core -- --ignored live_
+# Run the full replay gate against canonical sigs in tests/fixtures/canonical-sigs.txt.
+# HELIUS_API_KEY auto-loads from .env (gitignored).
+REPLAY_LIVE_TESTS=1 cargo test -p replay-core --test live_replay -- --ignored --nocapture
 
-# Capture a real Helius fixture:
+# Single-sig fetch test (asserts >10 resolved accounts for a Jupiter swap)
+REPLAY_LIVE_TESTS=1 cargo test -p replay-core -- --ignored live_fetch
+
+# Capture a real Helius response fixture
 HELIUS_API_KEY=... ./scripts/capture-fixture.sh <jupiter-swap-sig>
 ```
 
