@@ -25,7 +25,9 @@ async fn main() -> anyhow::Result<()> {
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
 
-    let bind = std::env::var("REPLAY_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8787".into());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8787".into());
+    let bind = std::env::var("REPLAY_BIND_ADDR")
+        .unwrap_or_else(|_| format!("0.0.0.0:{}", port));
     let addr: SocketAddr = bind.parse()?;
 
     let state = Arc::new(AppState::from_env()?);

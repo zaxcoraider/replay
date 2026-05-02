@@ -49,4 +49,4 @@ ENV REPLAY_IDL_CACHE_DIR=/app/.replay/idl-cache
 ENV RUST_LOG=replay_api=info,replay_core=info
 
 EXPOSE 8080
-CMD ["sh", "-c", "REPLAY_BIND_ADDR=0.0.0.0:${PORT:-8080} /usr/local/bin/replay-api"]
+CMD ["/usr/local/bin/replay-api"]
