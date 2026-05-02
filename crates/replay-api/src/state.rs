@@ -2,12 +2,13 @@
 
 use anyhow::Context;
 use dashmap::DashMap;
-use replay_core::{ForkedSession, HeliusRpcClient};
+use replay_core::{ForkedSession, HeliusClient, HeliusRpcClient};
+use std::sync::Arc;
 use std::time::Duration;
 
 pub struct AppState {
     pub sessions: DashMap<String, ForkedSession>,
-    pub client: HeliusRpcClient,
+    pub client: Arc<dyn HeliusClient>,
     pub session_ttl: Duration,
     pub max_sessions: usize,
 }
@@ -35,10 +36,20 @@ impl AppState {
 
         Ok(Self {
             sessions: DashMap::new(),
-            client,
+            client: Arc::new(client),
             session_ttl: Duration::from_secs(ttl_secs),
             max_sessions,
         })
+    }
+
+    #[doc(hidden)]
+    pub fn with_client(client: impl HeliusClient + 'static) -> Self {
+        Self {
+            sessions: DashMap::new(),
+            client: Arc::new(client),
+            session_ttl: Duration::from_secs(3600),
+            max_sessions: 100,
+        }
     }
 
     /// Remove expired sessions. Called periodically by a background task,

@@ -9,6 +9,7 @@ use crate::types::{FetchedTx, FetchedTxMeta};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use solana_sdk::{account::Account, pubkey::Pubkey, signature::Signature};
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, warn};
 
@@ -29,6 +30,24 @@ pub trait HeliusClient: Send + Sync {
     /// Fetch current account info (no slot constraint). Used for IDL accounts
     /// and similar cases where current state is what we want.
     async fn get_account_info(&self, pubkey: &Pubkey) -> Result<Option<Account>, ReplayError>;
+}
+
+/// Blanket impl so `Arc<dyn HeliusClient>` can be passed wherever `&C: HeliusClient`.
+#[async_trait]
+impl HeliusClient for Arc<dyn HeliusClient> {
+    async fn get_transaction(&self, sig: &Signature) -> Result<Option<FetchedTx>, ReplayError> {
+        self.as_ref().get_transaction(sig).await
+    }
+    async fn get_account_info_at_slot(
+        &self,
+        pubkey: &Pubkey,
+        slot: u64,
+    ) -> Result<Option<Account>, ReplayError> {
+        self.as_ref().get_account_info_at_slot(pubkey, slot).await
+    }
+    async fn get_account_info(&self, pubkey: &Pubkey) -> Result<Option<Account>, ReplayError> {
+        self.as_ref().get_account_info(pubkey).await
+    }
 }
 
 #[derive(Clone)]

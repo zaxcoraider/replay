@@ -35,3 +35,11 @@ dashmap = { workspace = true }
 ulid = { workspace = true }
 chrono = { workspace = true }
 dotenvy = "0.15"
+
+[dev-dependencies]
+async-trait = "0.1"
+tokio = { workspace = true }
+
+[lib]
+name = "replay_api"
+path = "src/lib.rs"

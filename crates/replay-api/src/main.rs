@@ -9,25 +9,15 @@
 //!   GET  /health                    liveness
 //!   GET  /version                   build info
 
-mod error;
-mod handlers;
-mod state;
-
-use axum::{
-    routing::{get, post},
-    Router,
-};
+use replay_api::{build_app, state::AppState};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tower_http::cors::CorsLayer;
-use tower_http::trace::TraceLayer;
+use std::time::Duration;
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-
-use crate::state::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load .env if present.
     let _ = dotenvy::dotenv();
 
     tracing_subscriber::registry()
@@ -40,17 +30,33 @@ async fn main() -> anyhow::Result<()> {
 
     let state = Arc::new(AppState::from_env()?);
 
-    let app = Router::new()
-        .route("/health", get(handlers::health))
-        .route("/version", get(handlers::version))
-        .route("/replay", post(handlers::replay))
-        .route("/fork", post(handlers::fork))
-        .route("/session/:id/mutate", post(handlers::mutate))
-        .route("/session/:id/execute", post(handlers::execute))
-        .route("/session/:id/diff", get(handlers::diff))
-        .layer(CorsLayer::very_permissive())
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    // Rate limit: 20 requests/min per IP, burst of 20.
+    let governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_millisecond(3_000) // 1 per 3 s ≈ 20/min
+            .burst_size(20)
+            .use_headers()
+            .finish()
+            .unwrap(),
+    );
+    let governor_limiter = governor_conf.limiter().clone();
+
+    // Background tasks: prune expired sessions + rate-limiter entries.
+    {
+        let state_clone = Arc::clone(&state);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                state_clone.prune_expired();
+                governor_limiter.retain_recent();
+            }
+        });
+    }
+
+    let app = build_app(Arc::clone(&state)).layer(GovernorLayer {
+        config: Arc::clone(&governor_conf),
+    });
 
     tracing::info!(?addr, "replay-api listening");
     let listener = tokio::net::TcpListener::bind(addr).await?;
