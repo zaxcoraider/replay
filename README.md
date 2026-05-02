@@ -10,7 +10,7 @@ Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MI
 
 ## Status
 
-**Day 10 of 18 done.** MVP is complete. Deploy + demo ready.
+**Day 10 of 18 done.** MVP is complete. Deploying API to Railway (in progress).
 
 - Engine (`replay-core`): fetch → reconstruct historical state → replay in litesvm → CPI trace tree with IDL-decoded args; `apply_field_mutation` encodes/re-encodes Borsh via IDL
 - API (`replay-api`): axum HTTP server, fork/mutate/execute/diff session lifecycle, rate limiting, 7 integration tests
@@ -116,12 +116,21 @@ fly deploy
 # Web → Vercel (connect GitHub repo, set NEXT_PUBLIC_REPLAY_API_URL)
 ```
 
+## Deployment status
+
+| Service | Platform | Status |
+|---------|----------|--------|
+| API | Railway | ⚠️ CDN routing issue — URL: `https://replay-production-aca1.up.railway.app` |
+| Web | Vercel | not started — set `NEXT_PUBLIC_REPLAY_API_URL` env var |
+| Demo sigs | — | `web/lib/demo-signatures.ts` — replace `FILL_ME_*` placeholders |
+
 ## Session bootstrap (next session = Day 11)
 
 ```bash
 git pull origin main
 cat memory/day-10.md
-# Then start coding — no additional context needed.
+# Check Railway deploy: curl -s https://replay-production-aca1.up.railway.app/health
+# If still broken → switch to Render or Koyeb
 ```
 
 ## License
