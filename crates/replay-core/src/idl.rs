@@ -180,6 +180,19 @@ impl IdlCache {
         }
     }
 
+    /// Synchronous lookup: bundled set first, then disk cache (within TTL).
+    /// Does NOT make any network requests. Returns `None` when neither source
+    /// has an IDL — the caller can fall back to `get_or_fetch` if it has a client.
+    pub fn get_local(&self, program_id: &Pubkey) -> Option<Idl> {
+        if let Some(raw) = self.bundled.get(program_id) {
+            return Some(Idl {
+                raw: raw.clone(),
+                source: IdlSource::Bundled,
+            });
+        }
+        self.read_disk(program_id)
+    }
+
     fn cache_path(&self, program_id: &Pubkey) -> PathBuf {
         self.dir.join(format!("{}.json", program_id))
     }
@@ -285,6 +298,18 @@ pub struct AccountDecoder<'a> {
 impl<'a> AccountDecoder<'a> {
     pub fn new(idl_cache: &'a IdlCache) -> Self {
         Self { idl_cache }
+    }
+
+    /// Synchronous instruction decode using only bundled + disk-cached IDLs.
+    /// Returns `(instruction_name, decoded_args, account_role_names)`.
+    /// Used by the trace builder which cannot block on network fetches.
+    pub fn decode_instruction_local(
+        &self,
+        program_id: &Pubkey,
+        data: &[u8],
+    ) -> Option<(String, Value, Vec<String>)> {
+        let idl = self.idl_cache.get_local(program_id)?;
+        decode_instruction_data(&idl, data)
     }
 
     /// Decode an account against the best-available decoder. Never errors;
@@ -712,6 +737,89 @@ fn take_slice<'a>(bytes: &mut &'a [u8], n: usize) -> Result<&'a [u8], BorshErr> 
     let s = &bytes[..n];
     *bytes = &bytes[n..];
     Ok(s)
+}
+
+// ---------- instruction discriminator + decoder ----------
+
+/// Anchor instruction discriminator: sha256("global:<name>")[..8].
+/// Different from the account discriminator which uses "account:<name>".
+pub fn anchor_instruction_discriminator(name: &str) -> [u8; 8] {
+    let h = hash(format!("global:{name}").as_bytes());
+    let bytes = h.to_bytes();
+    let mut disc = [0u8; 8];
+    disc.copy_from_slice(&bytes[..8]);
+    disc
+}
+
+/// Match instruction data against the IDL's `instructions` array.
+/// Returns `(name, decoded_args, account_role_names)` or `None` when
+/// the discriminator doesn't match any instruction.
+pub fn decode_instruction_data(idl: &Idl, data: &[u8]) -> Option<(String, Value, Vec<String>)> {
+    if data.len() < 8 {
+        return None;
+    }
+    let disc = &data[..8];
+    let instructions = idl.raw.get("instructions").and_then(|v| v.as_array())?;
+
+    for instr in instructions {
+        let name = instr.get("name").and_then(|v| v.as_str())?;
+        if anchor_instruction_discriminator(name) != disc {
+            continue;
+        }
+
+        let decoded_args = if let Some(args) = instr.get("args").and_then(|v| v.as_array()) {
+            let mut cursor: &[u8] = &data[8..];
+            let mut out = serde_json::Map::new();
+            let mut ok = true;
+            for arg in args {
+                let arg_name = match arg.get("name").and_then(|v| v.as_str()) {
+                    Some(n) => n,
+                    None => {
+                        ok = false;
+                        break;
+                    }
+                };
+                let arg_type = match arg.get("type") {
+                    Some(t) => t,
+                    None => {
+                        ok = false;
+                        break;
+                    }
+                };
+                match decode_type(idl, arg_type, &mut cursor) {
+                    Ok(v) => {
+                        out.insert(arg_name.into(), v);
+                    }
+                    Err(e) => {
+                        warn!(instruction = name, arg = arg_name, err = %e.0, "arg decode failed");
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if ok {
+                Value::Object(out)
+            } else {
+                Value::Null
+            }
+        } else {
+            Value::Object(serde_json::Map::new())
+        };
+
+        let roles: Vec<String> = instr
+            .get("accounts")
+            .and_then(|v| v.as_array())
+            .map(|accts| {
+                accts
+                    .iter()
+                    .filter_map(|a| a.get("name").and_then(|v| v.as_str()).map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        return Some((name.to_string(), decoded_args, roles));
+    }
+    None
 }
 
 /// Load any `assets/idls/<program_id>.json` files at the workspace root
