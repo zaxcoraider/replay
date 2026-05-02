@@ -6,30 +6,35 @@ Paste any mainnet transaction signature. Replay it locally against the exact
 account state that existed at its slot. Mutate any account. Re-run. See the
 diff.
 
-Built for the Colosseum Frontier 2026 hackathon. MIT-licensed from day 1.
+Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MIT-licensed from day 1.
 
 ## Status
 
-Day 3 of 18 — IDL-aware account decoder lives. `Trace.account_deltas`
-now carries `decoded_before` / `decoded_after` / `idl_type_name`.
-Three resolution layers: hand-written native decoders (SPL Token,
-Token-2022, System) → bundled IDLs in `assets/idls/` (Jupiter v6,
-Whirlpool, Drift v2, Kamino Lending pre-fetched, ~900 KB total) →
-on-disk cache (`~/.replay/idl-cache/`, 7-day TTL) → on-chain Anchor
-IDL fetched at the canonical PDA, zlib-decompressed. Failures degrade
-gracefully through the `DecodedAccount` enum — never `Err`. See
-[`memory/day-03.md`](memory/day-03.md) for the full snapshot.
+**Day 6 of 18 done.** The full backend is live and the web UI scaffold is running.
 
-The standalone spike at [`spikes/spike-replay.rs`](spikes/spike-replay.rs)
-remains as reference for the proven replay approach.
+- Engine (`replay-core`): fetch → reconstruct historical state → replay in litesvm → CPI trace tree with IDL-decoded args
+- API (`replay-api`): axum HTTP server, fork/mutate/execute/diff session lifecycle, rate limiting, 7 integration tests
+- Web (`web/`): Next.js 15 + Tailwind + shadcn. Landing page → `/replay/[sig]` → 3-panel view (CPI tree | frame detail | account inspector)
+
+See [`memory/day-06.md`](memory/day-06.md) for the full session snapshot.
 
 | Day | Topic | State |
 |----:|-------|-------|
-|  1  | Fetch a tx + resolve LUTs + extract compute-budget | done |
-|  2  | Replay in litesvm + reconstruct historical state + log diff | done |
-|  3  | IDL-aware account decoder + bundled IDLs | done |
-|  4  | Trace tree (CPI nesting + per-frame CU + IDL-decoded args) | next |
-| 5-18 | Fork/mutate → UI → CLI → SDK → submission | planned |
+|  1  | Fetch tx + resolve LUTs + extract compute-budget | ✅ done |
+|  2  | Replay in litesvm + reconstruct historical state + log diff | ✅ done |
+|  3  | IDL-aware account decoder + bundled IDLs | ✅ done |
+|  4  | CPI trace tree (nesting + per-frame CU + IDL-decoded args) | ✅ done |
+|  5  | Fork sessions + HTTP API (axum, rate limiting, integration tests) | ✅ done |
+|  6  | Web UI scaffold (landing + 3-panel replay view) | ✅ done |
+|  7  | Timeline scrubber (CU bar, clickable segments) | next |
+|  8  | Account mutator UI (fork → edit fields → re-run) | planned |
+|  9  | Diff view (baseline vs forked, side-by-side) | planned |
+| 10  | Demo preload (real sigs + guided tour) | planned |
+| 11  | CLI polish | planned |
+| 12  | TypeScript SDK | planned |
+| 13  | Rust SDK | planned |
+| 14  | Helius integration | planned |
+| 15–18 | Polish → submission | planned |
 
 ## Repo layout
 
@@ -39,15 +44,14 @@ replay/
 ├── README.md                 # this file
 ├── PLAN.md                   # 18-day hackathon plan
 ├── crates/
-│   ├── replay-core/          # the engine: fetch, reconstruct, execute
-│   ├── replay-api/           # axum HTTP/WebSocket server
+│   ├── replay-core/          # engine: fetch, reconstruct, execute, IDL decode
+│   ├── replay-api/           # axum HTTP server + session store
 │   ├── replay-cli/           # replay <signature> binary
-│   └── replay-sdk/           # stable Rust SDK
-├── docs/                     # 00-START-HERE, project brief, architecture,
-│                             # technical spec, Solana gotchas, demo script,
-│                             # submission checklist, KNOWN-FIXUPS
+│   └── replay-sdk/           # stable Rust SDK (Day 13)
+├── web/                      # Next.js 15 web UI
+├── docs/                     # project brief, architecture, API examples, etc.
 ├── prompts/                  # SYSTEM-PROMPT + day-01..18 session prompts
-├── memory/                   # local per-day status snapshots
+├── memory/                   # per-day session snapshots (start here each day)
 ├── scripts/                  # tooling (capture-fixture.sh, ...)
 └── spikes/                   # exploratory single-file scripts
 ```
@@ -57,54 +61,55 @@ replay/
 ```bash
 # 1. Set your Helius API key
 cp .env.example .env
-# edit .env and add HELIUS_API_KEY
+# edit .env → add HELIUS_API_KEY
 
-# 2. Build
+# 2. Build Rust workspace
 cargo build
 
-# 3. Fetch a tx (parse + resolve LUTs + extract compute-budget; no replay)
-cargo run -p replay-cli -- fetch <SIGNATURE>          # pretty summary
-cargo run -p replay-cli -- fetch <SIGNATURE> --json   # full TxContext JSON
+# 3. CLI — fetch + replay
+cargo run -p replay-cli -- fetch <SIGNATURE>
+cargo run -p replay-cli -- replay <SIGNATURE>
+cargo run -p replay-cli -- replay <SIGNATURE> --json
 
-# 4. Replay a tx end-to-end against historical state
-cargo run -p replay-cli -- replay <SIGNATURE>             # ✓ progress + log match
-cargo run -p replay-cli -- replay <SIGNATURE> --diff-logs # side-by-side log diff
-cargo run -p replay-cli -- replay <SIGNATURE> --json      # full Trace JSON
+# 4. Start the API server
+cargo run -p replay-api        # binds 0.0.0.0:8787
+
+# 5. Start the web UI (separate terminal)
+cd web && pnpm dev             # http://localhost:3000
 ```
 
 ## Development
 
 ```bash
-cargo check --workspace      # ~20s incremental, several minutes cold
-cargo test -p replay-core    # mock-backed unit tests, no network
+# Rust
+cargo check --workspace
+cargo test -p replay-core --lib          # 27 unit tests, no network
+cargo test -p replay-api                 # 7 integration tests, no network
 cargo clippy -- -D warnings
 cargo fmt
+
+# Web
+cd web && pnpm tsc --noEmit
+cd web && pnpm build
+cd web && pnpm dev
 ```
 
 ### Live (network) tests
 
 ```bash
-# Run the full replay gate against canonical sigs in tests/fixtures/canonical-sigs.txt.
-# HELIUS_API_KEY auto-loads from .env (gitignored).
+# Requires HELIUS_API_KEY in .env
 REPLAY_LIVE_TESTS=1 cargo test -p replay-core --test live_replay -- --ignored --nocapture
-
-# Single-sig fetch test (asserts >10 resolved accounts for a Jupiter swap)
-REPLAY_LIVE_TESTS=1 cargo test -p replay-core -- --ignored live_fetch
-
-# Capture a real Helius response fixture
-HELIUS_API_KEY=... ./scripts/capture-fixture.sh <jupiter-swap-sig>
 ```
 
-## Working with Claude Code
+## Session bootstrap (next session = Day 7)
 
-Each working day is one focused session. At the start of a session:
-
-1. Open `memory/day-XX.md` for the most recent day to recover state.
-2. Paste `prompts/SYSTEM-PROMPT.md` + the day's prompt (`prompts/day-XX-*.md`)
-   as the first message.
-3. Drive the diff — Claude Code will confidently produce wrong code for
-   Solana-specific things (account layouts, PDA derivations, compute budget).
-   You are the domain expert; it's the typist.
+```bash
+git pull origin main
+cat memory/day-06.md    # full Day-6 snapshot
+cat memory/day-05.md    # API context
+cat prompts/day-07-timeline-scrubber.md
+# Then start coding — no additional context needed.
+```
 
 ## License
 
