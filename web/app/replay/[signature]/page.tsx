@@ -9,6 +9,8 @@ import { FrameDetail } from "@/components/FrameDetail";
 import { AccountInspector } from "@/components/AccountInspector";
 import { Timeline } from "@/components/Timeline";
 import { CuGauge } from "@/components/CuGauge";
+import { DiffView } from "@/components/DiffView";
+import { DiffSummaryCard } from "@/components/DiffSummaryCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddressChip } from "@/components/AddressChip";
@@ -39,12 +41,15 @@ export default function ReplayPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rerunning, setRerunning] = useState(false);
-  const { currentTrace, sessionId, pendingMutations, setSession, setTrace, setDiff } =
+  const [showDiff, setShowDiff] = useState(false);
+
+  const { currentTrace, sessionId, pendingMutations, diff, setSession, setTrace, setDiff } =
     useReplayStore();
 
   useEffect(() => {
     setLoading(true);
     setError(null);
+    setShowDiff(false);
     fork(decoded)
       .then((r) => {
         setSession(r.session_id, r.baseline_trace);
@@ -64,6 +69,7 @@ export default function ReplayPage({ params }: PageProps) {
       setTrace(result.trace);
       const d = await getDiff(sessionId);
       setDiff(d);
+      // Don't auto-open diff — let the user click "View diff" in the summary card
     } catch (e) {
       console.error("Re-run failed:", e);
     } finally {
@@ -96,17 +102,49 @@ export default function ReplayPage({ params }: PageProps) {
     <div className="flex flex-col h-screen overflow-hidden">
       {/* Top bar */}
       <header className="flex items-center gap-3 px-4 py-2 border-b border-zinc-800 shrink-0">
-        <button onClick={() => router.push("/")} className="text-zinc-500 hover:text-zinc-300 text-sm">←</button>
+        <button
+          onClick={() => router.push("/")}
+          className="text-zinc-500 hover:text-zinc-300 text-sm"
+        >
+          ←
+        </button>
         <AddressChip address={trace.signature} />
         <ResultBadge trace={trace} />
         <span className="text-xs text-zinc-500">Slot {trace.slot.toLocaleString()}</span>
         <span className="text-xs text-zinc-500">{formatTime(trace.block_time)}</span>
-        <div className="ml-auto flex items-center gap-3">
+
+        <div className="ml-auto flex items-center gap-2">
+          {/* Diff summary card — shown after a re-run when not in diff mode */}
+          {diff && !showDiff && (
+            <DiffSummaryCard
+              diff={diff}
+              onView={() => setShowDiff(true)}
+              onClose={() => setDiff(null)}
+            />
+          )}
+
           <CuGauge frames={trace.frames} totalCu={trace.total_cu} />
           <span className="text-xs text-zinc-500">{trace.total_cu.toLocaleString()} CU</span>
+
           {trace.log_divergence && (
-            <Badge variant="destructive" className="text-xs">Log divergence</Badge>
+            <Badge variant="destructive" className="text-xs">
+              Log divergence
+            </Badge>
           )}
+
+          {/* Toggle back from diff view */}
+          {showDiff && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowDiff(false)}
+              className="h-7 text-xs text-zinc-400"
+            >
+              ← Trace
+            </Button>
+          )}
+
+          {/* Re-run button */}
           <Button
             size="sm"
             onClick={handleRerun}
@@ -123,34 +161,40 @@ export default function ReplayPage({ params }: PageProps) {
         </div>
       </header>
 
-      {/* Timeline scrubber */}
-      <Timeline frames={trace.frames} totalCu={trace.total_cu} />
+      {/* Timeline scrubber — hidden in diff mode */}
+      {!showDiff && <Timeline frames={trace.frames} totalCu={trace.total_cu} />}
 
-      {/* Body: 3-panel layout */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: CPI tree */}
-        <aside className="w-64 shrink-0 border-r border-zinc-800 overflow-y-auto">
-          <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-zinc-600 border-b border-zinc-800">
-            Trace tree
-          </div>
-          <CpiTree frames={trace.frames} totalCu={trace.total_cu} />
-        </aside>
+      {/* Body */}
+      {showDiff && diff ? (
+        <div className="flex-1 overflow-hidden">
+          <DiffView diff={diff} />
+        </div>
+      ) : (
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left: CPI tree */}
+          <aside className="w-64 shrink-0 border-r border-zinc-800 overflow-y-auto">
+            <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-zinc-600 border-b border-zinc-800">
+              Trace tree
+            </div>
+            <CpiTree frames={trace.frames} totalCu={trace.total_cu} />
+          </aside>
 
-        {/* Center: frame detail */}
-        <main className="flex-1 overflow-hidden">
-          <FrameDetail />
-        </main>
+          {/* Center: frame detail */}
+          <main className="flex-1 overflow-hidden">
+            <FrameDetail />
+          </main>
 
-        {/* Right: account inspector */}
-        <aside className="w-72 shrink-0 border-l border-zinc-800 overflow-hidden flex flex-col">
-          <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-zinc-600 border-b border-zinc-800">
-            Account inspector
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <AccountInspector />
-          </div>
-        </aside>
-      </div>
+          {/* Right: account inspector */}
+          <aside className="w-72 shrink-0 border-l border-zinc-800 overflow-hidden flex flex-col">
+            <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-zinc-600 border-b border-zinc-800">
+              Account inspector
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <AccountInspector />
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
