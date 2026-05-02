@@ -7,6 +7,8 @@ import { useReplayStore } from "@/store/replay-store";
 import { CpiTree } from "@/components/CpiTree";
 import { FrameDetail } from "@/components/FrameDetail";
 import { AccountInspector } from "@/components/AccountInspector";
+import { Timeline } from "@/components/Timeline";
+import { CuGauge } from "@/components/CuGauge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddressChip } from "@/components/AddressChip";
@@ -76,11 +78,17 @@ export default function ReplayPage({ params }: PageProps) {
         <ResultBadge trace={trace} />
         <span className="text-xs text-zinc-500">Slot {trace.slot.toLocaleString()}</span>
         <span className="text-xs text-zinc-500">{formatTime(trace.block_time)}</span>
-        <span className="text-xs text-zinc-500 ml-auto">{trace.total_cu.toLocaleString()} CU</span>
-        {trace.log_divergence && (
-          <Badge variant="destructive" className="text-xs">Log divergence</Badge>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          <CuGauge frames={trace.frames} totalCu={trace.total_cu} />
+          <span className="text-xs text-zinc-500">{trace.total_cu.toLocaleString()} CU</span>
+          {trace.log_divergence && (
+            <Badge variant="destructive" className="text-xs">Log divergence</Badge>
+          )}
+        </div>
       </header>
+
+      {/* Timeline scrubber */}
+      <Timeline frames={trace.frames} totalCu={trace.total_cu} />
 
       {/* Body: 3-panel layout */}
       <div className="flex flex-1 overflow-hidden">

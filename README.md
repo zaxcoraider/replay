@@ -10,13 +10,13 @@ Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MI
 
 ## Status
 
-**Day 6 of 18 done.** The full backend is live and the web UI scaffold is running.
+**Day 7 of 18 done.** The full backend is live and the web UI scaffold is running.
 
 - Engine (`replay-core`): fetch → reconstruct historical state → replay in litesvm → CPI trace tree with IDL-decoded args
 - API (`replay-api`): axum HTTP server, fork/mutate/execute/diff session lifecycle, rate limiting, 7 integration tests
 - Web (`web/`): Next.js 15 + Tailwind + shadcn. Landing page → `/replay/[sig]` → 3-panel view (CPI tree | frame detail | account inspector)
 
-See [`memory/day-06.md`](memory/day-06.md) for the full session snapshot.
+See [`memory/day-07.md`](memory/day-07.md) for the full session snapshot.
 
 | Day | Topic | State |
 |----:|-------|-------|
@@ -26,8 +26,8 @@ See [`memory/day-06.md`](memory/day-06.md) for the full session snapshot.
 |  4  | CPI trace tree (nesting + per-frame CU + IDL-decoded args) | ✅ done |
 |  5  | Fork sessions + HTTP API (axum, rate limiting, integration tests) | ✅ done |
 |  6  | Web UI scaffold (landing + 3-panel replay view) | ✅ done |
-|  7  | Timeline scrubber (CU bar, clickable segments) | next |
-|  8  | Account mutator UI (fork → edit fields → re-run) | planned |
+|  7  | Timeline scrubber (CU bar, clickable segments) | ✅ done |
+|  8  | Account mutator UI (fork → edit fields → re-run) | next |
 |  9  | Diff view (baseline vs forked, side-by-side) | planned |
 | 10  | Demo preload (real sigs + guided tour) | planned |
 | 11  | CLI polish | planned |
