@@ -45,9 +45,11 @@ COPY --from=builder /app/crates/replay-core/assets /app/crates/replay-core/asset
 # Disk-cache dir for on-chain IDL fetches
 RUN mkdir -p /app/.replay/idl-cache
 
-ENV REPLAY_BIND_ADDR=0.0.0.0:8080
 ENV REPLAY_IDL_CACHE_DIR=/app/.replay/idl-cache
 ENV RUST_LOG=replay_api=info,replay_core=info
+# PORT is set by Railway/Render at runtime; fall back to 8080 for local Docker
+ENV PORT=8080
+ENV REPLAY_BIND_ADDR=0.0.0.0:8080
 
 EXPOSE 8080
-CMD ["replay-api"]
+CMD ["sh", "-c", "REPLAY_BIND_ADDR=0.0.0.0:${PORT} replay-api"]

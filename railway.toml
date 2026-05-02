@@ -1,0 +1,8 @@
+[build]
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "replay-api"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
