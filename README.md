@@ -10,13 +10,15 @@ Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MI
 
 ## Status
 
-**Day 9 of 18 done.** Full fork → mutate → re-run → diff loop is live.
+**Day 10 of 18 done.** MVP is complete. Deploy + demo ready.
 
 - Engine (`replay-core`): fetch → reconstruct historical state → replay in litesvm → CPI trace tree with IDL-decoded args; `apply_field_mutation` encodes/re-encodes Borsh via IDL
 - API (`replay-api`): axum HTTP server, fork/mutate/execute/diff session lifecycle, rate limiting, 7 integration tests
 - Web (`web/`): Next.js 15 + Tailwind + shadcn. Landing → 3-panel replay view → edit accounts → Re-run → DiffView (baseline vs re-run side-by-side)
+- Deploy: `Dockerfile` + `fly.toml` (API on Fly.io) + `web/vercel.json` (web on Vercel)
 
-See [`memory/day-09.md`](memory/day-09.md) for the full session snapshot.
+See [`memory/day-10.md`](memory/day-10.md) for the full session snapshot.
+See [`docs/DEPLOY.md`](docs/DEPLOY.md) for deployment instructions.
 
 | Day | Topic | State |
 |----:|-------|-------|
@@ -29,7 +31,8 @@ See [`memory/day-09.md`](memory/day-09.md) for the full session snapshot.
 |  7  | Timeline scrubber (CU bar, clickable segments) | ✅ done |
 |  8  | Account mutator UI (fork → edit fields → re-run) | ✅ done |
 |  9  | Diff view (baseline vs forked, side-by-side) | ✅ done |
-| 10  | Demo preload + live deployment | next |
+| 10  | Demo preload + live deployment | ✅ done |
+| 11  | CLI polish | next |
 | 11  | CLI polish | planned |
 | 12  | TypeScript SDK | planned |
 | 13  | Rust SDK | planned |
@@ -101,12 +104,23 @@ cd web && pnpm dev
 REPLAY_LIVE_TESTS=1 cargo test -p replay-core --test live_replay -- --ignored --nocapture
 ```
 
-## Session bootstrap (next session = Day 10)
+## Deployment
+
+See [`docs/DEPLOY.md`](docs/DEPLOY.md) for full instructions.
+
+```bash
+# API → Fly.io
+fly secrets set HELIUS_API_KEY=your_key
+fly deploy
+
+# Web → Vercel (connect GitHub repo, set NEXT_PUBLIC_REPLAY_API_URL)
+```
+
+## Session bootstrap (next session = Day 11)
 
 ```bash
 git pull origin main
-cat memory/day-09.md    # full Day-9 snapshot
-cat prompts/day-10-demo-preload.md
+cat memory/day-10.md
 # Then start coding — no additional context needed.
 ```
 
