@@ -1,0 +1,33 @@
+# Fly.io deployment for replay-api
+# Deploy: fly launch --no-deploy   (first time, creates app)
+#         fly secrets set HELIUS_API_KEY=your_key_here
+#         fly deploy
+
+app = 'replay-api'
+primary_region = 'ord'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 50
+    soft_limit = 25
+
+[env]
+  REPLAY_BIND_ADDR = '0.0.0.0:8080'
+  REPLAY_SESSION_TTL_SECS = '3600'
+  REPLAY_MAX_SESSIONS = '50'
+  RUST_LOG = 'replay_api=info,replay_core=info'
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
