@@ -10,13 +10,13 @@ Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MI
 
 ## Status
 
-**Day 7 of 18 done.** The full backend is live and the web UI scaffold is running.
+**Day 8 of 18 done.** Full mutation loop is live: fork → edit fields → apply → re-run.
 
-- Engine (`replay-core`): fetch → reconstruct historical state → replay in litesvm → CPI trace tree with IDL-decoded args
+- Engine (`replay-core`): fetch → reconstruct historical state → replay in litesvm → CPI trace tree with IDL-decoded args; `apply_field_mutation` encodes/re-encodes Borsh via IDL
 - API (`replay-api`): axum HTTP server, fork/mutate/execute/diff session lifecycle, rate limiting, 7 integration tests
-- Web (`web/`): Next.js 15 + Tailwind + shadcn. Landing page → `/replay/[sig]` → 3-panel view (CPI tree | frame detail | account inspector)
+- Web (`web/`): Next.js 15 + Tailwind + shadcn. Landing page → `/replay/[sig]` → 3-panel view with Timeline, editable AccountInspector, Re-run button
 
-See [`memory/day-07.md`](memory/day-07.md) for the full session snapshot.
+See [`memory/day-08.md`](memory/day-08.md) for the full session snapshot.
 
 | Day | Topic | State |
 |----:|-------|-------|
@@ -27,8 +27,8 @@ See [`memory/day-07.md`](memory/day-07.md) for the full session snapshot.
 |  5  | Fork sessions + HTTP API (axum, rate limiting, integration tests) | ✅ done |
 |  6  | Web UI scaffold (landing + 3-panel replay view) | ✅ done |
 |  7  | Timeline scrubber (CU bar, clickable segments) | ✅ done |
-|  8  | Account mutator UI (fork → edit fields → re-run) | next |
-|  9  | Diff view (baseline vs forked, side-by-side) | planned |
+|  8  | Account mutator UI (fork → edit fields → re-run) | ✅ done |
+|  9  | Diff view (baseline vs forked, side-by-side) | next |
 | 10  | Demo preload (real sigs + guided tour) | planned |
 | 11  | CLI polish | planned |
 | 12  | TypeScript SDK | planned |
@@ -101,13 +101,12 @@ cd web && pnpm dev
 REPLAY_LIVE_TESTS=1 cargo test -p replay-core --test live_replay -- --ignored --nocapture
 ```
 
-## Session bootstrap (next session = Day 7)
+## Session bootstrap (next session = Day 9)
 
 ```bash
 git pull origin main
-cat memory/day-06.md    # full Day-6 snapshot
-cat memory/day-05.md    # API context
-cat prompts/day-07-timeline-scrubber.md
+cat memory/day-08.md    # full Day-8 snapshot
+cat prompts/day-09-diff-view.md
 # Then start coding — no additional context needed.
 ```
 
