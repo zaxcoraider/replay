@@ -739,6 +739,324 @@ fn take_slice<'a>(bytes: &mut &'a [u8], n: usize) -> Result<&'a [u8], BorshErr> 
     Ok(s)
 }
 
+// ---------- Anchor IDL encoder (mirrors the decoder above) ----------
+
+/// Apply a field mutation to an Anchor account's raw data.
+///
+/// Steps:
+/// 1. Locate the account type by discriminator.
+/// 2. Decode the full account to JSON with the existing decoder.
+/// 3. Navigate to `path` (dot-separated) and overwrite the value.
+/// 4. Re-encode back to Borsh bytes (discriminator preserved verbatim).
+pub fn apply_field_mutation(
+    idl: &Idl,
+    data: &[u8],
+    path: &str,
+    new_value: &Value,
+) -> Result<Vec<u8>, ReplayError> {
+    if data.len() < 8 {
+        return Err(ReplayError::Decoder(
+            "account data too short for Anchor discriminator".into(),
+        ));
+    }
+    let disc_bytes: [u8; 8] = data[..8].try_into().expect("8 bytes");
+
+    let accounts = idl
+        .raw
+        .get("accounts")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| ReplayError::Decoder("IDL has no `accounts` array".into()))?;
+
+    let acct_def = accounts
+        .iter()
+        .find(|a| {
+            let name = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            anchor_account_discriminator(name) == disc_bytes
+        })
+        .ok_or_else(|| ReplayError::InvalidMutationPath {
+            path: path.into(),
+            type_name: "unknown_discriminator".into(),
+        })?;
+
+    let type_name = acct_def
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let type_def = acct_def
+        .get("type")
+        .ok_or_else(|| ReplayError::Decoder("account missing `type` in IDL".into()))?;
+
+    let mut cursor: &[u8] = &data[8..];
+    let mut decoded = decode_type(idl, type_def, &mut cursor)
+        .map_err(|e| ReplayError::Decoder(format!("decode for field mutation: {}", e.0)))?;
+
+    set_json_path(&mut decoded, path, new_value.clone()).map_err(|e| {
+        ReplayError::InvalidMutationPath {
+            path: path.into(),
+            type_name: format!("{type_name}: {e}"),
+        }
+    })?;
+
+    let mut buf = Vec::with_capacity(data.len());
+    buf.extend_from_slice(&disc_bytes);
+    encode_type(idl, type_def, &decoded, &mut buf)
+        .map_err(|e| ReplayError::Decoder(format!("re-encode after field mutation: {}", e.0)))?;
+
+    Ok(buf)
+}
+
+fn set_json_path(val: &mut Value, path: &str, new_val: Value) -> Result<(), String> {
+    let (head, tail) = match path.find('.') {
+        Some(i) => (&path[..i], Some(&path[i + 1..])),
+        None => (path, None),
+    };
+    match val {
+        Value::Object(map) => {
+            if let Some(rest) = tail {
+                let inner = map
+                    .get_mut(head)
+                    .ok_or_else(|| format!("field `{head}` not found"))?;
+                set_json_path(inner, rest, new_val)
+            } else {
+                if !map.contains_key(head) {
+                    return Err(format!("field `{head}` not found"));
+                }
+                map.insert(head.into(), new_val);
+                Ok(())
+            }
+        }
+        _ => Err(format!("cannot navigate into non-object at `{head}`")),
+    }
+}
+
+fn encode_type(idl: &Idl, ty: &Value, value: &Value, buf: &mut Vec<u8>) -> Result<(), BorshErr> {
+    if let Some(s) = ty.as_str() {
+        return encode_primitive(s, value, buf);
+    }
+    let obj = ty
+        .as_object()
+        .ok_or_else(|| BorshErr(format!("unsupported type shape: {ty}")))?;
+
+    if let Some(kind) = obj.get("kind").and_then(|v| v.as_str()) {
+        match kind {
+            "struct" => {
+                let fields = obj
+                    .get("fields")
+                    .and_then(|v| v.as_array())
+                    .ok_or_else(|| BorshErr("struct missing fields".into()))?;
+                let map = value
+                    .as_object()
+                    .ok_or_else(|| BorshErr("expected object for struct value".into()))?;
+                for f in fields {
+                    let name = f
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| BorshErr("struct field missing name".into()))?;
+                    let f_ty = f
+                        .get("type")
+                        .ok_or_else(|| BorshErr("struct field missing type".into()))?;
+                    let fval = map
+                        .get(name)
+                        .ok_or_else(|| BorshErr(format!("struct missing field `{name}` in value")))?;
+                    encode_type(idl, f_ty, fval, buf)?;
+                }
+                return Ok(());
+            }
+            "enum" => {
+                let variants = obj
+                    .get("variants")
+                    .and_then(|v| v.as_array())
+                    .ok_or_else(|| BorshErr("enum missing variants".into()))?;
+                let variant_name = value
+                    .get("variant")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| BorshErr("enum value missing `variant` key".into()))?;
+                let (tag, variant) = variants
+                    .iter()
+                    .enumerate()
+                    .find(|(_, v)| v.get("name").and_then(|n| n.as_str()) == Some(variant_name))
+                    .ok_or_else(|| BorshErr(format!("enum variant `{variant_name}` not found")))?;
+                buf.push(tag as u8);
+                let payload = value.get("payload").unwrap_or(&Value::Null);
+                if let Some(fields) = variant.get("fields").and_then(|v| v.as_array()) {
+                    if !fields.is_empty() {
+                        if fields[0].get("name").is_some() {
+                            let fmap = payload.as_object().ok_or_else(|| {
+                                BorshErr("named variant payload must be object".into())
+                            })?;
+                            for f in fields {
+                                let n = f
+                                    .get("name")
+                                    .and_then(|v| v.as_str())
+                                    .ok_or_else(|| BorshErr("variant field missing name".into()))?;
+                                let f_ty = f
+                                    .get("type")
+                                    .ok_or_else(|| BorshErr("variant field missing type".into()))?;
+                                let fval = fmap.get(n).ok_or_else(|| {
+                                    BorshErr(format!("variant missing field `{n}`"))
+                                })?;
+                                encode_type(idl, f_ty, fval, buf)?;
+                            }
+                        } else {
+                            let arr = payload.as_array().ok_or_else(|| {
+                                BorshErr("tuple variant payload must be array".into())
+                            })?;
+                            for (f_ty, val) in fields.iter().zip(arr.iter()) {
+                                encode_type(idl, f_ty, val, buf)?;
+                            }
+                        }
+                    }
+                }
+                return Ok(());
+            }
+            other => return Err(BorshErr(format!("unsupported kind: {other}"))),
+        }
+    }
+
+    if let Some(inner) = obj.get("option") {
+        if value.is_null() {
+            buf.push(0);
+        } else {
+            buf.push(1);
+            encode_type(idl, inner, value, buf)?;
+        }
+        return Ok(());
+    }
+    if let Some(inner) = obj.get("vec") {
+        let arr = value
+            .as_array()
+            .ok_or_else(|| BorshErr("expected array for vec".into()))?;
+        buf.extend_from_slice(&(arr.len() as u32).to_le_bytes());
+        for item in arr {
+            encode_type(idl, inner, item, buf)?;
+        }
+        return Ok(());
+    }
+    if let Some(spec) = obj.get("array").and_then(|v| v.as_array()) {
+        if spec.len() != 2 {
+            return Err(BorshErr("array spec must be [type, length]".into()));
+        }
+        let n = spec[1]
+            .as_u64()
+            .ok_or_else(|| BorshErr("array length not an int".into()))? as usize;
+        let arr = value
+            .as_array()
+            .ok_or_else(|| BorshErr("expected array for fixed array".into()))?;
+        if arr.len() != n {
+            return Err(BorshErr(format!(
+                "array length mismatch: expected {n}, got {}",
+                arr.len()
+            )));
+        }
+        for item in arr {
+            encode_type(idl, &spec[0], item, buf)?;
+        }
+        return Ok(());
+    }
+    if let Some(name) = obj.get("defined").and_then(|v| v.as_str()) {
+        let types = idl
+            .raw
+            .get("types")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| BorshErr(format!("type `{name}` referenced but no `types` in IDL")))?;
+        let user_type = types
+            .iter()
+            .find(|t| t.get("name").and_then(|n| n.as_str()) == Some(name))
+            .ok_or_else(|| BorshErr(format!("type `{name}` not found in IDL")))?;
+        let inner = user_type
+            .get("type")
+            .ok_or_else(|| BorshErr(format!("type `{name}` missing `type` field")))?;
+        return encode_type(idl, inner, value, buf);
+    }
+
+    Err(BorshErr(format!("unrecognised type shape: {ty}")))
+}
+
+fn encode_primitive(name: &str, value: &Value, buf: &mut Vec<u8>) -> Result<(), BorshErr> {
+    match name {
+        "u8" => buf.push(coerce_u64(value)? as u8),
+        "i8" => buf.push(coerce_i64(value)? as i8 as u8),
+        "u16" => buf.extend_from_slice(&(coerce_u64(value)? as u16).to_le_bytes()),
+        "i16" => buf.extend_from_slice(&(coerce_i64(value)? as i16).to_le_bytes()),
+        "u32" => buf.extend_from_slice(&(coerce_u64(value)? as u32).to_le_bytes()),
+        "i32" => buf.extend_from_slice(&(coerce_i64(value)? as i32).to_le_bytes()),
+        "u64" => buf.extend_from_slice(&coerce_u64(value)?.to_le_bytes()),
+        "i64" => buf.extend_from_slice(&coerce_i64(value)?.to_le_bytes()),
+        "u128" => buf.extend_from_slice(&coerce_u128(value)?.to_le_bytes()),
+        "i128" => buf.extend_from_slice(&coerce_i128(value)?.to_le_bytes()),
+        "f32" => {
+            let v = value
+                .as_f64()
+                .ok_or_else(|| BorshErr("expected f32".into()))? as f32;
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
+        "f64" => {
+            let v = value
+                .as_f64()
+                .ok_or_else(|| BorshErr("expected f64".into()))?;
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
+        "bool" => buf.push(
+            value
+                .as_bool()
+                .ok_or_else(|| BorshErr("expected bool".into()))? as u8,
+        ),
+        "string" => {
+            let s = value
+                .as_str()
+                .ok_or_else(|| BorshErr("expected string".into()))?;
+            buf.extend_from_slice(&(s.len() as u32).to_le_bytes());
+            buf.extend_from_slice(s.as_bytes());
+        }
+        "publicKey" | "pubkey" => {
+            let s = value
+                .as_str()
+                .ok_or_else(|| BorshErr("expected pubkey string".into()))?;
+            let pk =
+                Pubkey::from_str(s).map_err(|e| BorshErr(format!("bad pubkey `{s}`: {e}")))?;
+            buf.extend_from_slice(pk.as_ref());
+        }
+        "bytes" => {
+            let s = value
+                .as_str()
+                .ok_or_else(|| BorshErr("expected hex string for bytes".into()))?;
+            let raw =
+                hex::decode(s).map_err(|e| BorshErr(format!("bad hex in bytes: {e}")))?;
+            buf.extend_from_slice(&(raw.len() as u32).to_le_bytes());
+            buf.extend_from_slice(&raw);
+        }
+        other => return Err(BorshErr(format!("unsupported primitive: {other}"))),
+    }
+    Ok(())
+}
+
+fn coerce_u64(v: &Value) -> Result<u64, BorshErr> {
+    v.as_u64()
+        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        .ok_or_else(|| BorshErr(format!("expected u64-compatible value, got {v}")))
+}
+
+fn coerce_i64(v: &Value) -> Result<i64, BorshErr> {
+    v.as_i64()
+        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        .ok_or_else(|| BorshErr(format!("expected i64-compatible value, got {v}")))
+}
+
+fn coerce_u128(v: &Value) -> Result<u128, BorshErr> {
+    v.as_u64()
+        .map(|n| n as u128)
+        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        .ok_or_else(|| BorshErr(format!("expected u128-compatible value, got {v}")))
+}
+
+fn coerce_i128(v: &Value) -> Result<i128, BorshErr> {
+    v.as_i64()
+        .map(|n| n as i128)
+        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        .ok_or_else(|| BorshErr(format!("expected i128-compatible value, got {v}")))
+}
+
 // ---------- instruction discriminator + decoder ----------
 
 /// Anchor instruction discriminator: sha256("global:<name>")[..8].

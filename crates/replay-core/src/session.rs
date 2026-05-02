@@ -124,13 +124,12 @@ impl ForkedSession {
         })
     }
 
-    /// Resolve the mutation log into concrete Account overrides. This is
-    /// where IDL-aware field edits get translated back into byte-level
-    /// state changes.
+    /// Resolve the mutation log into concrete Account overrides.
     async fn resolve_mutations<C: HeliusClient>(
         &self,
         _client: &C,
     ) -> Result<Vec<(Pubkey, Account)>, ReplayError> {
+        let idl_cache = IdlCache::default();
         let mut out: HashMap<Pubkey, Account> = HashMap::new();
 
         for (pk, mutation) in &self.mutations {
@@ -143,7 +142,7 @@ impl ForkedSession {
                     detail: format!("account {pk} not in reconstructed state"),
                 })?;
 
-            let mutated = apply_mutation(base, mutation)?;
+            let mutated = apply_mutation(base, mutation, &idl_cache)?;
             out.insert(*pk, mutated);
         }
 
@@ -151,13 +150,19 @@ impl ForkedSession {
     }
 }
 
-fn apply_mutation(mut account: Account, mutation: &AccountMutation) -> Result<Account, ReplayError> {
+fn apply_mutation(
+    mut account: Account,
+    mutation: &AccountMutation,
+    idl_cache: &IdlCache,
+) -> Result<Account, ReplayError> {
     match mutation {
         AccountMutation::Lamports { new_value } => {
             account.lamports = *new_value;
         }
         AccountMutation::Owner { new_value } => {
-            account.owner = new_value.parse().map_err(|e| ReplayError::Decoder(format!("bad owner pubkey: {e:?}")))?;
+            account.owner = new_value
+                .parse()
+                .map_err(|e| ReplayError::Decoder(format!("bad owner pubkey: {e:?}")))?;
         }
         AccountMutation::RawBytes { offset, bytes, extend } => {
             let required = *offset + bytes.len();
@@ -175,12 +180,15 @@ fn apply_mutation(mut account: Account, mutation: &AccountMutation) -> Result<Ac
             }
             account.data[*offset..*offset + bytes.len()].copy_from_slice(bytes);
         }
-        AccountMutation::Field { path, new_value: _ } => {
-            // Day 3: implement IDL-aware field edit via Borsh re-serialization.
-            return Err(ReplayError::InvalidMutationPath {
-                path: path.clone(),
-                type_name: "field-edit not yet implemented".into(),
-            });
+        AccountMutation::Field { path, new_value } => {
+            let idl = idl_cache
+                .get_local(&account.owner)
+                .ok_or_else(|| ReplayError::InvalidMutationPath {
+                    path: path.clone(),
+                    type_name: format!("no IDL for owner {}", account.owner),
+                })?;
+            account.data =
+                crate::idl::apply_field_mutation(&idl, &account.data, path, new_value)?;
         }
     }
     Ok(account)

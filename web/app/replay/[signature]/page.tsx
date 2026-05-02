@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { replay } from "@/lib/api";
+import { fork, execute, diff as getDiff } from "@/lib/api";
 import type { Trace } from "@/lib/types";
 import { useReplayStore } from "@/store/replay-store";
 import { CpiTree } from "@/components/CpiTree";
@@ -38,15 +38,38 @@ export default function ReplayPage({ params }: PageProps) {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { currentTrace, setTrace } = useReplayStore();
+  const [rerunning, setRerunning] = useState(false);
+  const { currentTrace, sessionId, pendingMutations, setSession, setTrace, setDiff } =
+    useReplayStore();
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    replay(decoded)
-      .then((t) => { setTrace(t); setLoading(false); })
-      .catch((e: Error) => { setError(e.message); setLoading(false); });
-  }, [decoded, setTrace]);
+    fork(decoded)
+      .then((r) => {
+        setSession(r.session_id, r.baseline_trace);
+        setLoading(false);
+      })
+      .catch((e: Error) => {
+        setError(e.message);
+        setLoading(false);
+      });
+  }, [decoded, setSession]);
+
+  const handleRerun = async () => {
+    if (!sessionId) return;
+    setRerunning(true);
+    try {
+      const result = await execute(sessionId);
+      setTrace(result.trace);
+      const d = await getDiff(sessionId);
+      setDiff(d);
+    } catch (e) {
+      console.error("Re-run failed:", e);
+    } finally {
+      setRerunning(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -84,6 +107,19 @@ export default function ReplayPage({ params }: PageProps) {
           {trace.log_divergence && (
             <Badge variant="destructive" className="text-xs">Log divergence</Badge>
           )}
+          <Button
+            size="sm"
+            onClick={handleRerun}
+            disabled={rerunning || pendingMutations.length === 0}
+            className="h-7 text-xs gap-1.5"
+          >
+            {rerunning ? "Running…" : "Re-run"}
+            {pendingMutations.length > 0 && (
+              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 py-0">
+                {pendingMutations.length}
+              </Badge>
+            )}
+          </Button>
         </div>
       </header>
 
