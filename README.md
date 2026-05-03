@@ -12,11 +12,12 @@ Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MI
 | Service | URL |
 |---------|-----|
 | Web UI | **https://replay-weld.vercel.app** |
-| API | https://replay-y4wq.onrender.com *(Render — needs redeploy)* |
+| API | https://replay-y4wq.onrender.com *(Render, proxied via Vercel)* |
+| Docs | **https://replay-weld.vercel.app/docs** |
 
 ## Status
 
-**Day 13 of 18 done.**
+**Day 13 of 18 done.** SDKs published. Docs live.
 
 | Day | Topic | State |
 |----:|-------|-------|
@@ -32,8 +33,8 @@ Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MI
 | 10  | Demo preload + Dockerfile + deployment | ✅ |
 | 11  | CLI polish (spinner, CPI table, `inspect` subcommand) | ✅ |
 | 12  | TypeScript SDK (`@zaxcoraider/replay-sdk`) | ✅ |
-| 13  | Rust SDK (`replay-sdk`) | ✅ |
-| 14  | Helius LaserStream integration | planned |
+| 13  | Rust SDK (`replay-sdk`) + docs site + npm/crates.io publish | ✅ |
+| 14  | Helius LaserStream integration | 🔜 next |
 | 15–18 | Polish → submission | planned |
 
 ## What it does
@@ -155,12 +156,21 @@ cd web && pnpm tsc --noEmit
 cd web && pnpm build
 ```
 
+## Published packages
+
+| Package | Registry |
+|---------|----------|
+| [`@zaxcoraider/replay-sdk`](https://www.npmjs.com/package/@zaxcoraider/replay-sdk) | npm |
+| [`replay-sdk`](https://crates.io/crates/replay-sdk) | crates.io |
+| [`replay-core`](https://crates.io/crates/replay-core) | crates.io |
+
 ## Deployment
 
 | Service | Platform | URL |
 |---------|----------|-----|
 | API | Render (Docker) | https://replay-y4wq.onrender.com |
 | Web | Vercel (Next.js) | https://replay-weld.vercel.app |
+| Docs | Vercel (Next.js) | https://replay-weld.vercel.app/docs |
 
 See [`docs/DEPLOY.md`](docs/DEPLOY.md) for full instructions.
 
