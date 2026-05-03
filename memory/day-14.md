@@ -151,6 +151,37 @@ budget. End-to-end smoke is intended for the next session by browsing to
 - Web: https://replay-weld.vercel.app
 - Docs: https://replay-weld.vercel.app/docs
 
+## Local test status (2026-05-03 EOD)
+
+End-of-day local smoke of `/replay-live/:sig` was **blocked, not failed**.
+After `cargo run -p replay-api` reported `replay-api listening
+addr=0.0.0.0:8787`, every request to `http://localhost:8787/health` AND
+`http://127.0.0.1:8787/health` (browser AND `curl.exe`) returned the plain-
+text body `Unable To Extract Key!` — the exact error string Helius RPC
+returns on a missing/empty `api-key` query parameter.
+
+Diagnostic facts established:
+- The cargo terminal showed **no new log line** when the request was made
+  → traffic never reached our axum server.
+- `/health` is `async fn health() -> &'static str { "ok" }` and never
+  touches Helius, so the body is unambiguously coming from somewhere else
+  on the wire — likely a system/browser proxy or another local process
+  intercepting `localhost:8787`.
+
+Verification step left for next session: stop the API (Ctrl+C in the
+cargo terminal) and refresh the browser. If "Unable To Extract Key!"
+still appears with the API down → confirms a proxy/extension on the box
+intercepting before localhost. If it shows "connection refused" → some
+other process is squatting on :8787 (find via `netstat -ano | findstr
+:8787`).
+
+The code itself compiles, clippy-clean, passes `tsc --noEmit` for the web
+side, and is committed (`d869908`) + pushed. Real correctness check is
+either (a) fix the local proxy and re-run, (b) deploy to Render and test
+against `https://replay-weld.vercel.app/replay/<SIG>` Live tab, or (c)
+write an integration test in `replay-api` that mocks `HeliusClient` and
+asserts the SSE event sequence.
+
 ## Next session bootstrap (Day 15)
 
 Day 15 = public-goods polish. Read:
