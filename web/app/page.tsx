@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -171,6 +172,13 @@ export default function HomePage() {
           >
             GitHub
           </a>
+          {" "}·{" "}
+          <Link
+            href="/docs"
+            className="text-zinc-600 hover:text-zinc-400 underline underline-offset-2"
+          >
+            Docs
+          </Link>
         </p>
       </div>
     </main>
