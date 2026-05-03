@@ -201,10 +201,10 @@ HTTP 502 — Helius RPC error`}</Pre>
 
           {/* ── TypeScript SDK ── */}
           <H2 id="typescript-sdk">TypeScript SDK</H2>
-          <Pre>{`npm install @replay/sdk`}</Pre>
+          <Pre>{`npm install @zaxcoraider/replay-sdk`}</Pre>
 
           <H3>One-shot replay</H3>
-          <Pre>{`import { ReplayClient } from '@replay/sdk';
+          <Pre>{`import { ReplayClient } from '@zaxcoraider/replay-sdk';
 
 const client = new ReplayClient({ apiUrl: 'https://replay-y4wq.onrender.com' });
 
@@ -229,7 +229,7 @@ console.log('Result changed:', diff.result_changed);
 console.log('CU delta:', diff.total_cu_delta);`}</Pre>
 
           <H3>CI regression helper</H3>
-          <Pre>{`import { replayHistorical, loadSignatures } from '@replay/sdk/testing';
+          <Pre>{`import { replayHistorical, loadSignatures } from '@zaxcoraider/replay-sdk/testing';
 
 const report = await replayHistorical({
   apiUrl: 'https://replay-y4wq.onrender.com',

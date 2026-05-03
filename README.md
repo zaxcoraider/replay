@@ -31,7 +31,7 @@ Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MI
 |  9  | Diff view (baseline vs forked, side-by-side) | ✅ |
 | 10  | Demo preload + Dockerfile + deployment | ✅ |
 | 11  | CLI polish (spinner, CPI table, `inspect` subcommand) | ✅ |
-| 12  | TypeScript SDK (`@replay/sdk`) | ✅ |
+| 12  | TypeScript SDK (`@zaxcoraider/replay-sdk`) | ✅ |
 | 13  | Rust SDK (`replay-sdk`) | ✅ |
 | 14  | Helius LaserStream integration | planned |
 | 15–18 | Polish → submission | planned |
@@ -56,7 +56,7 @@ replay/
 │   ├── replay-cli/           # `replay` CLI binary
 │   └── replay-sdk/           # stable Rust SDK
 ├── packages/
-│   └── replay-sdk-ts/        # TypeScript SDK (@replay/sdk)
+│   └── replay-sdk-ts/        # TypeScript SDK (@zaxcoraider/replay-sdk)
 ├── web/                      # Next.js 15 web UI
 ├── docs/                     # architecture, API reference, deploy guide
 ├── prompts/                  # day-01..18 session prompts
@@ -86,11 +86,11 @@ cd web && pnpm dev             # http://localhost:3000
 ## TypeScript SDK
 
 ```bash
-npm install @replay/sdk
+npm install @zaxcoraider/replay-sdk
 ```
 
 ```ts
-import { ReplayClient } from '@replay/sdk';
+import { ReplayClient } from '@zaxcoraider/replay-sdk';
 
 const client = new ReplayClient({ apiUrl: 'https://replay-y4wq.onrender.com' });
 
@@ -108,7 +108,7 @@ console.log('Result changed:', diff.result_changed);
 
 ```ts
 // CI regression helper
-import { replayHistorical, loadSignatures } from '@replay/sdk/testing';
+import { replayHistorical, loadSignatures } from '@zaxcoraider/replay-sdk/testing';
 
 const report = await replayHistorical({
   apiUrl: 'https://replay-y4wq.onrender.com',
