@@ -11,7 +11,7 @@ keywords = ["solana", "debugger", "sdk"]
 categories = ["development-tools", "api-bindings"]
 
 [dependencies]
-replay-core = { path = "../replay-core" }
+replay-core = { path = "../replay-core", version = "0.1" }
 solana-sdk = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
