@@ -1,6 +1,6 @@
 import type { Trace, TraceDiff, ApiError } from "./types";
 
-const BASE = process.env.NEXT_PUBLIC_REPLAY_API_URL ?? "http://localhost:8787";
+const BASE = "/rpc";
 
 async function parseResponse<T>(res: Response): Promise<T> {
   const text = await res.text();
