@@ -7,7 +7,6 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
-use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::state::AppState;
@@ -21,7 +20,6 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .route("/session/:id/mutate", post(handlers::mutate))
         .route("/session/:id/execute", post(handlers::execute))
         .route("/session/:id/diff", get(handlers::diff))
-        .layer(CorsLayer::very_permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

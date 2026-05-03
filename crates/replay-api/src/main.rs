@@ -14,6 +14,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+use tower_http::cors::CorsLayer;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[tokio::main]
@@ -56,9 +57,11 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    let app = build_app(Arc::clone(&state)).layer(GovernorLayer {
-        config: Arc::clone(&governor_conf),
-    });
+    let app = build_app(Arc::clone(&state))
+        .layer(GovernorLayer {
+            config: Arc::clone(&governor_conf),
+        })
+        .layer(CorsLayer::very_permissive());
 
     tracing::info!(?addr, "replay-api listening");
     let listener = tokio::net::TcpListener::bind(addr).await?;
