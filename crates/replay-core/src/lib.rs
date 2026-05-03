@@ -19,6 +19,7 @@ pub mod svm;
 pub mod idl;
 pub mod trace;
 pub mod session;
+pub mod laserstream;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -30,6 +31,10 @@ pub use types::{
 };
 pub use rpc::{HeliusClient, HeliusRpcClient};
 pub use session::ForkedSession;
+pub use laserstream::{
+    connect as laserstream_connect, LaserStreamConfig, LaserStreamStatus,
+    LiveReplayEvent, LiveSource,
+};
 
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;

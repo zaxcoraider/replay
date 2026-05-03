@@ -17,7 +17,7 @@ Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MI
 
 ## Status
 
-**Day 13 of 18 done.** SDKs published. Docs live.
+**Day 14 of 18 done.** Live replay (SSE) shipped. SDKs published. Docs live.
 
 | Day | Topic | State |
 |----:|-------|-------|
@@ -34,7 +34,7 @@ Built for the Colosseum Frontier 2026 hackathon (deadline: **May 11, 2026**). MI
 | 11  | CLI polish (spinner, CPI table, `inspect` subcommand) | ✅ |
 | 12  | TypeScript SDK (`@zaxcoraider/replay-sdk`) | ✅ |
 | 13  | Rust SDK (`replay-sdk`) + docs site + npm/crates.io publish | ✅ |
-| 14  | Helius LaserStream integration | 🔜 next |
+| 14  | Helius LaserStream integration (SSE `/replay-live`, Live UI tab, blog draft) | ✅ |
 | 15–18 | Polish → submission | planned |
 
 ## What it does

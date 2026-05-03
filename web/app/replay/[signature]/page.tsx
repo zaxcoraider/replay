@@ -11,6 +11,7 @@ import { Timeline } from "@/components/Timeline";
 import { CuGauge } from "@/components/CuGauge";
 import { DiffView } from "@/components/DiffView";
 import { DiffSummaryCard } from "@/components/DiffSummaryCard";
+import { LiveReplayPanel } from "@/components/LiveReplayPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddressChip } from "@/components/AddressChip";
@@ -42,6 +43,7 @@ export default function ReplayPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null);
   const [rerunning, setRerunning] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
+  const [view, setView] = useState<"trace" | "live">("trace");
 
   const { currentTrace, sessionId, pendingMutations, diff, setSession, setTrace, setDiff } =
     useReplayStore();
@@ -113,6 +115,22 @@ export default function ReplayPage({ params }: PageProps) {
         <span className="text-xs text-zinc-500">Slot {trace.slot.toLocaleString()}</span>
         <span className="text-xs text-zinc-500">{formatTime(trace.block_time)}</span>
 
+        {/* View toggle: trace (default) vs live SSE stream */}
+        <div className="ml-3 inline-flex items-center rounded border border-zinc-800 overflow-hidden text-xs">
+          <button
+            onClick={() => setView("trace")}
+            className={`px-2 py-0.5 ${view === "trace" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+          >
+            Trace
+          </button>
+          <button
+            onClick={() => setView("live")}
+            className={`px-2 py-0.5 border-l border-zinc-800 ${view === "live" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+          >
+            Live
+          </button>
+        </div>
+
         <div className="ml-auto flex items-center gap-2">
           {/* Diff summary card — shown after a re-run when not in diff mode */}
           {diff && !showDiff && (
@@ -161,11 +179,17 @@ export default function ReplayPage({ params }: PageProps) {
         </div>
       </header>
 
-      {/* Timeline scrubber — hidden in diff mode */}
-      {!showDiff && <Timeline frames={trace.frames} totalCu={trace.total_cu} />}
+      {/* Timeline scrubber — hidden in diff and live modes */}
+      {!showDiff && view === "trace" && (
+        <Timeline frames={trace.frames} totalCu={trace.total_cu} />
+      )}
 
       {/* Body */}
-      {showDiff && diff ? (
+      {view === "live" ? (
+        <div className="flex-1 overflow-hidden">
+          <LiveReplayPanel signature={decoded} />
+        </div>
+      ) : showDiff && diff ? (
         <div className="flex-1 overflow-hidden">
           <DiffView diff={diff} />
         </div>

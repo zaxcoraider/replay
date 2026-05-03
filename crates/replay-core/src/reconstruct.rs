@@ -26,11 +26,46 @@ use tracing::{debug, info, warn};
 /// SDK constant that might not be in every release).
 const LOADER_V4_ID: Pubkey = solana_sdk::pubkey!("LoaderV411111111111111111111111111111111111");
 
+/// Progress signal emitted by [`reconstruct_state_with_progress`] as it
+/// fetches each account. The live-replay SSE endpoint maps these into
+/// `account_fetched` wire events; the standard `reconstruct_state` wrapper
+/// passes a no-op closure and discards them.
+#[derive(Debug, Clone)]
+pub enum ReconstructProgress {
+    AccountFetched {
+        pubkey: Pubkey,
+        size: usize,
+        is_program: bool,
+    },
+}
+
 #[tracing::instrument(skip(client, ctx), fields(slot = ctx.slot))]
 pub async fn reconstruct_state<C: HeliusClient>(
     client: &C,
     ctx: &TxContext,
 ) -> Result<ReconstructedState, ReplayError> {
+    reconstruct_state_with_progress(client, ctx, |_| {}).await
+}
+
+/// Same as [`reconstruct_state`] but invokes `on_progress` once for every
+/// account the reconstruction touches (pre-slot fetches, ALT fetches, and
+/// program-data fetches for upgradeable programs).
+///
+/// The callback is synchronous and `Send`; pushing into a `tokio::sync::mpsc`
+/// sender via `try_send` (or queuing into a `VecDeque` for batched dispatch)
+/// is the expected usage. We deliberately don't make it async to keep the
+/// lifetime story simple — the SSE handler is the only caller and it is
+/// happy to drop events if the receiver is gone.
+#[tracing::instrument(skip(client, ctx, on_progress), fields(slot = ctx.slot))]
+pub async fn reconstruct_state_with_progress<C, F>(
+    client: &C,
+    ctx: &TxContext,
+    mut on_progress: F,
+) -> Result<ReconstructedState, ReplayError>
+where
+    C: HeliusClient,
+    F: FnMut(ReconstructProgress) + Send,
+{
     let fetch_slot = ctx.slot.saturating_sub(1);
     let mut accounts: HashMap<Pubkey, Account> = HashMap::new();
     let mut programs: HashMap<Pubkey, ProgramInfo> = HashMap::new();
@@ -46,6 +81,11 @@ pub async fn reconstruct_state<C: HeliusClient>(
     for pubkey in &ctx.resolved_account_keys {
         match client.get_account_info_at_slot(pubkey, fetch_slot).await? {
             Some(account) => {
+                on_progress(ReconstructProgress::AccountFetched {
+                    pubkey: *pubkey,
+                    size: account.data.len(),
+                    is_program: account.executable,
+                });
                 accounts.insert(*pubkey, account);
             }
             None => {
@@ -74,6 +114,11 @@ pub async fn reconstruct_state<C: HeliusClient>(
                 .await?
             {
                 Some(account) => {
+                    on_progress(ReconstructProgress::AccountFetched {
+                        pubkey: atl.account_key,
+                        size: account.data.len(),
+                        is_program: false,
+                    });
                     accounts.insert(atl.account_key, account);
                 }
                 None => {
@@ -146,6 +191,11 @@ pub async fn reconstruct_state<C: HeliusClient>(
                         program_id: pda.to_string(),
                         slot: fetch_slot,
                     })?;
+                on_progress(ReconstructProgress::AccountFetched {
+                    pubkey: pda,
+                    size: pda_account.data.len(),
+                    is_program: true,
+                });
                 ProgramInfo {
                     program_account,
                     program_data_address: Some(pda),

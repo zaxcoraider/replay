@@ -3048,12 +3048,14 @@ dependencies = [
  "chrono",
  "dashmap 6.1.0",
  "dotenvy",
+ "futures",
  "replay-core",
  "serde",
  "serde_json",
  "solana-sdk",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "tower",
  "tower-http",
  "tower_governor",
@@ -6323,6 +6325,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

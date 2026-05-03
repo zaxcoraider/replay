@@ -1,5 +1,6 @@
 pub mod error;
 pub mod handlers;
+pub mod live;
 pub mod state;
 
 use axum::{
@@ -20,6 +21,7 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .route("/session/:id/mutate", post(handlers::mutate))
         .route("/session/:id/execute", post(handlers::execute))
         .route("/session/:id/diff", get(handlers::diff))
+        .route("/replay-live/:signature", get(live::replay_live))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

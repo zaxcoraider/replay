@@ -3,6 +3,7 @@
 use anyhow::Context;
 use dashmap::DashMap;
 use replay_core::{ForkedSession, HeliusClient, HeliusRpcClient};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,6 +12,62 @@ pub struct AppState {
     pub client: Arc<dyn HeliusClient>,
     pub session_ttl: Duration,
     pub max_sessions: usize,
+    pub live_sessions: LiveSessionLimiter,
+}
+
+/// Counts in-flight `/replay-live` SSE sessions. A `LiveSessionPermit` is
+/// returned by [`LiveSessionLimiter::try_acquire`] and decrements the
+/// counter when dropped, so callers can't leak slots on error paths.
+pub struct LiveSessionLimiter {
+    inflight: Arc<AtomicUsize>,
+    cap: usize,
+}
+
+pub struct LiveSessionPermit {
+    inflight: Arc<AtomicUsize>,
+}
+
+impl Drop for LiveSessionPermit {
+    fn drop(&mut self) {
+        self.inflight.fetch_sub(1, Ordering::Release);
+    }
+}
+
+impl LiveSessionLimiter {
+    pub fn new(cap: usize) -> Self {
+        Self {
+            inflight: Arc::new(AtomicUsize::new(0)),
+            cap,
+        }
+    }
+
+    pub fn cap(&self) -> usize {
+        self.cap
+    }
+
+    /// Increment the in-flight counter if it is below the cap. CAS so
+    /// concurrent acquires don't race past the limit.
+    pub fn try_acquire(&self) -> Option<LiveSessionPermit> {
+        let mut current = self.inflight.load(Ordering::Acquire);
+        loop {
+            if current >= self.cap {
+                return None;
+            }
+            match self.inflight.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => {
+                    return Some(LiveSessionPermit {
+                        inflight: Arc::clone(&self.inflight),
+                    });
+                }
+                Err(observed) => current = observed,
+            }
+        }
+    }
 }
 
 impl AppState {
@@ -34,11 +91,17 @@ impl AppState {
             .and_then(|s| s.parse().ok())
             .unwrap_or(100);
 
+        let max_live_sessions: usize = std::env::var("REPLAY_MAX_LIVE_SESSIONS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(5);
+
         Ok(Self {
             sessions: DashMap::new(),
             client: Arc::new(client),
             session_ttl: Duration::from_secs(ttl_secs),
             max_sessions,
+            live_sessions: LiveSessionLimiter::new(max_live_sessions),
         })
     }
 
@@ -49,6 +112,7 @@ impl AppState {
             client: Arc::new(client),
             session_ttl: Duration::from_secs(3600),
             max_sessions: 100,
+            live_sessions: LiveSessionLimiter::new(5),
         }
     }
 

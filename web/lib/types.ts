@@ -71,3 +71,17 @@ export interface TraceDiff {
 export interface ApiError {
   error: { code: string; message: string };
 }
+
+// --- Live replay (SSE) event shapes — mirror of replay_core::LiveReplayEvent
+
+export type LiveSource = "laserstream" | "rpc";
+
+export type LiveReplayEvent =
+  | { type: "mode"; source: LiveSource }
+  | { type: "slot_observed"; slot: number; block_time: number | null }
+  | { type: "account_fetched"; pubkey: string; size: number; is_program: boolean }
+  | { type: "all_accounts_fetched"; count: number }
+  | { type: "execution_started" }
+  | { type: "frame_completed"; frame: CpiFrame }
+  | { type: "done"; trace: Trace }
+  | { type: "error"; code: string; message: string };
