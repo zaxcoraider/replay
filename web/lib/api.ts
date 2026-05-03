@@ -2,22 +2,30 @@ import type { Trace, TraceDiff, ApiError } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_REPLAY_API_URL ?? "http://localhost:8787";
 
+async function parseResponse<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`API unreachable (${res.status}): ${text.slice(0, 120)}`);
+  }
+  if (!res.ok) throw new Error((json as ApiError).error?.message ?? res.statusText);
+  return json as T;
+}
+
 async function post<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error((json as ApiError).error?.message ?? res.statusText);
-  return json as T;
+  return parseResponse<T>(res);
 }
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
-  const json = await res.json();
-  if (!res.ok) throw new Error((json as ApiError).error?.message ?? res.statusText);
-  return json as T;
+  return parseResponse<T>(res);
 }
 
 export async function replay(signature: string): Promise<Trace> {
