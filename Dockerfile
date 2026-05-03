@@ -25,6 +25,7 @@ RUN cargo fetch
 # Now copy real source and build
 COPY crates/ crates/
 RUN cargo build --release -p replay-api
+RUN ldd /app/target/release/replay-api
 
 # Stage 2: minimal runtime image
 FROM debian:bookworm-slim
@@ -32,7 +33,7 @@ FROM debian:bookworm-slim
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y ca-certificates && \
+    apt-get install -y ca-certificates libssl3 && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the binary
