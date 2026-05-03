@@ -1,20 +1,28 @@
-//! `replay` CLI.
+//! `replay` CLI — time-travel debugger for Solana transactions.
 //!
 //! Subcommands:
-//!   replay <signature>       One-shot replay; print trace
-//!   replay fetch <signature> Just fetch, don't execute (debugging)
-//!   replay serve             Run the API server locally
+//!   replay <signature>           One-shot replay; print trace
+//!   replay fetch <signature>     Fetch tx + resolved state (no execution)
+//!   replay inspect <sig> -a <pk> Decode one account at the tx's pre-slot
+//!   replay serve                 Print how to start the API server
 //!
-//! Day 11 extends this with `fork` (REPL mode) and `diff` (cross-replay).
+//! Global flags: --rpc, --json, --verbose
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
+use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
+use std::time::Duration;
 
 #[derive(Parser)]
 #[command(name = "replay")]
 #[command(version)]
-#[command(about = "Time-travel debugger for Solana transactions", long_about = None)]
+#[command(about = "Time-travel debugger for Solana transactions")]
+#[command(long_about = "\
+Replay any Solana mainnet transaction against its exact historical account \
+state. Fork the session, mutate fields, re-run, and inspect the diff.\n\n\
+Requires HELIUS_API_KEY in the environment (or a .env file), or pass --rpc \
+with a full RPC URL.")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -27,27 +35,42 @@ struct Cli {
     #[arg(long, global = true)]
     json: bool,
 
-    /// Verbose tracing.
+    /// Verbose tracing output.
     #[arg(short, long, global = true)]
     verbose: bool,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Replay a transaction.
+    /// Replay a transaction and print its trace.
     Replay {
+        /// Base58 transaction signature.
         signature: String,
 
-        /// Print mainnet vs replay logs side-by-side when divergent.
+        /// Print mainnet vs replay logs side-by-side when they diverge.
         #[arg(long)]
         diff_logs: bool,
     },
 
-    /// Fetch a tx + resolved state; print without executing. For debugging.
-    Fetch { signature: String },
+    /// Fetch a transaction and its resolved account state without executing.
+    Fetch {
+        /// Base58 transaction signature.
+        signature: String,
+    },
 
-    /// Start the HTTP API server.
+    /// Decode and print one account's state at the transaction's pre-slot.
+    Inspect {
+        /// Base58 transaction signature (determines the slot).
+        signature: String,
+
+        /// Public key of the account to inspect.
+        #[arg(short, long)]
+        account: String,
+    },
+
+    /// Print instructions for starting the HTTP API server.
     Serve {
+        /// Address to bind (used only in the printed example).
         #[arg(long, default_value = "0.0.0.0:8787")]
         bind: String,
     },
@@ -59,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    let filter = if cli.verbose { "debug" } else { "info" };
+    let filter = if cli.verbose { "debug" } else { "warn" };
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -72,51 +95,60 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Replay { signature, diff_logs } => {
-            // JSON path: keep using the one-shot replay() for SDK parity.
             if cli.json {
+                let sp = spinner("Replaying…");
                 let trace = replay_core::replay(&signature, &client).await?;
+                sp.finish_and_clear();
                 println!("{}", serde_json::to_string_pretty(&trace)?);
                 return Ok(());
             }
 
-            // Pretty path: orchestrate step-by-step so we can stream
-            // ✓-prefixed progress lines as each phase completes.
             let sig = signature
                 .parse()
                 .with_context(|| format!("'{signature}' is not a valid base58 signature"))?;
 
+            // ── Fetch ────────────────────────────────────────────────────
+            let sp = spinner("Fetching transaction from Helius…");
             let mut ctx = replay_core::fetch::fetch_full_tx_context(&client, &sig).await?;
-            println!(
-                "{} Fetched tx from Helius (slot {})",
+            sp.finish_with_message(format!(
+                "{} Fetched      slot={}  accounts={}  logs={}",
                 "✓".green(),
-                ctx.slot
-            );
+                ctx.slot.to_string().bright_white(),
+                ctx.resolved_account_keys.len().to_string().bright_white(),
+                ctx.mainnet_logs.len().to_string().bright_white(),
+            ));
 
+            // ── Reconstruct ──────────────────────────────────────────────
+            let sp = spinner("Reconstructing historical state…");
             let state = replay_core::reconstruct::reconstruct_state(&client, &ctx).await?;
             ctx.pre_account_snapshots = replay_core::reconstruct::snapshot_pre_state(&state);
-            println!(
-                "{} Reconstructed state: {} accounts, {} programs",
+            sp.finish_with_message(format!(
+                "{} Reconstructed accounts={}  programs={}",
                 "✓".green(),
-                state.accounts.len(),
-                state.programs.len()
-            );
+                state.accounts.len().to_string().bright_white(),
+                state.programs.len().to_string().bright_white(),
+            ));
 
+            // ── Execute ──────────────────────────────────────────────────
+            let sp = spinner("Executing in LiteSVM…");
             let mut runner = replay_core::svm::SvmRunner::new();
             runner.seed(&state)?;
             runner.set_clock_for_slot(ctx.slot, ctx.block_time);
-            println!("{} Loaded into LiteSVM", "✓".green());
-
             let execution = runner.execute(&ctx)?;
-            match &execution.result {
-                replay_core::TxResult::Success => {
-                    println!("{} Replayed successfully", "✓".green());
-                }
+            let result_label = match &execution.result {
+                replay_core::TxResult::Success => "success".green().to_string(),
                 replay_core::TxResult::Failure { error, .. } => {
-                    println!("{} Replay failed — {}", "✓".yellow(), error.dimmed());
+                    format!("failed — {}", error.as_str().dimmed())
                 }
-            }
+            };
+            sp.finish_with_message(format!(
+                "{} Replayed     {}  CU={}",
+                "✓".green(),
+                result_label,
+                format_cu(execution.cu_consumed).bright_white(),
+            ));
 
-            // Compare logs
+            // ── Log match ────────────────────────────────────────────────
             let mainnet = &ctx.mainnet_logs;
             let replay_logs = &execution.logs;
             let matched = mainnet
@@ -127,24 +159,41 @@ async fn main() -> anyhow::Result<()> {
             let total = mainnet.len().max(replay_logs.len());
             if matched == mainnet.len() && mainnet.len() == replay_logs.len() {
                 println!(
-                    "{} Logs match mainnet: {}/{} lines identical",
+                    "{} Logs match   {}/{} lines identical",
                     "✓".green(),
-                    matched,
-                    total
+                    matched.to_string().bright_white(),
+                    total.to_string().bright_white(),
                 );
             } else {
                 println!(
                     "{} Logs diverge at line {} ({}/{} matched)",
                     "✗".red(),
-                    matched + 1,
-                    matched,
-                    total
+                    (matched + 1).to_string().bright_white(),
+                    matched.to_string().bright_white(),
+                    total.to_string().bright_white(),
                 );
             }
 
-            println!("Total CU consumed: {}", format_underscores(execution.cu_consumed));
+            // ── CPI frame table ──────────────────────────────────────────
+            // Use the full trace to get the CPI tree.
+            let sp = spinner("Building CPI trace…");
+            let trace = replay_core::replay(&signature, &client).await?;
+            sp.finish_and_clear();
+            if !trace.frames.is_empty() {
+                println!();
+                println!("{}", "Programs invoked:".bold());
+                println!(
+                    "  {:<6}  {:<48}  {:>12}",
+                    "depth".dimmed(),
+                    "program".dimmed(),
+                    "CU".dimmed(),
+                );
+                print_frames(&trace.frames, 0);
+            }
 
+            // ── Log diff ─────────────────────────────────────────────────
             if diff_logs && matched < total {
+                println!();
                 print_log_diff(mainnet, replay_logs);
             }
         }
@@ -153,7 +202,10 @@ async fn main() -> anyhow::Result<()> {
             let sig = signature
                 .parse()
                 .with_context(|| format!("'{signature}' is not a valid base58 signature"))?;
+
+            let sp = spinner("Fetching transaction…");
             let ctx = replay_core::fetch::fetch_full_tx_context(&client, &sig).await?;
+            sp.finish_and_clear();
 
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&ctx)?);
@@ -169,13 +221,69 @@ async fn main() -> anyhow::Result<()> {
                 ctx.compute_budget_instructions.len(),
             );
             for (i, k) in ctx.resolved_account_keys.iter().enumerate() {
-                println!("  [{:>3}] {}", i.dimmed(), k);
+                println!("  [{:>3}] {}", i.to_string().dimmed(), k);
+            }
+        }
+
+        Commands::Inspect { signature, account } => {
+            let sig = signature
+                .parse()
+                .with_context(|| format!("'{signature}' is not a valid base58 signature"))?;
+            let pk: solana_sdk::pubkey::Pubkey = account
+                .parse()
+                .with_context(|| format!("'{account}' is not a valid pubkey"))?;
+
+            let sp = spinner("Fetching + reconstructing state…");
+            let ctx = replay_core::fetch::fetch_full_tx_context(&client, &sig).await?;
+            let state = replay_core::reconstruct::reconstruct_state(&client, &ctx).await?;
+            sp.finish_and_clear();
+
+            match state.accounts.get(&pk) {
+                None => {
+                    eprintln!(
+                        "{} Account {} not found in reconstructed state",
+                        "✗".red(),
+                        pk
+                    );
+                    std::process::exit(1);
+                }
+                Some(acc) => {
+                    if cli.json {
+                        let v = serde_json::json!({
+                            "pubkey": pk.to_string(),
+                            "lamports": acc.lamports,
+                            "owner": acc.owner.to_string(),
+                            "executable": acc.executable,
+                            "data_len": acc.data.len(),
+                        });
+                        println!("{}", serde_json::to_string_pretty(&v)?);
+                    } else {
+                        println!("{}", pk.to_string().bright_white().bold());
+                        println!("  lamports   {}", format_cu(acc.lamports));
+                        println!("  owner      {}", acc.owner.to_string().dimmed());
+                        println!("  executable {}", acc.executable);
+                        println!("  data       {} bytes", acc.data.len());
+                        if !acc.data.is_empty() {
+                            let preview = acc
+                                .data
+                                .iter()
+                                .take(32)
+                                .map(|b| format!("{:02x}", b))
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            println!("  hex[0..32] {}", preview.dimmed());
+                        }
+                    }
+                }
             }
         }
 
         Commands::Serve { bind } => {
-            println!("Serving requires the replay-api binary; run:");
-            println!("  REPLAY_BIND_ADDR={bind} cargo run -p replay-api");
+            println!("{}", "To start the API server:".bold());
+            println!(
+                "  REPLAY_BIND_ADDR={} cargo run -p replay-api --release",
+                bind
+            );
         }
     }
 
@@ -183,20 +291,64 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn build_client(rpc: Option<&str>) -> anyhow::Result<replay_core::HeliusRpcClient> {
-    let client = match rpc {
-        Some(url) => replay_core::HeliusRpcClient::from_url(url)?,
+    match rpc {
+        Some(url) => Ok(replay_core::HeliusRpcClient::from_url(url)?),
         None => {
             let key = std::env::var("HELIUS_API_KEY")
-                .context("set HELIUS_API_KEY or pass --rpc")?;
-            replay_core::HeliusRpcClient::from_api_key(&key)?
+                .context("set HELIUS_API_KEY in .env or pass --rpc <url>")?;
+            Ok(replay_core::HeliusRpcClient::from_api_key(&key)?)
         }
-    };
-    Ok(client)
+    }
+}
+
+fn spinner(msg: &str) -> ProgressBar {
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::with_template("{spinner:.cyan} {msg}")
+            .unwrap()
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+    );
+    pb.set_message(msg.to_string());
+    pb.enable_steady_tick(Duration::from_millis(80));
+    pb
+}
+
+fn print_frames(frames: &[replay_core::CpiFrame], _indent: usize) {
+    for frame in frames {
+        let prog = frame
+            .program_name
+            .as_deref()
+            .unwrap_or("unknown");
+        let short_pid = abbrev(&frame.program_id);
+        let ix_name = frame
+            .instruction_name
+            .as_deref()
+            .map(|n| format!("  {}", n.dimmed()))
+            .unwrap_or_default();
+        println!(
+            "  [{:<2}]  {:<20} {}{}  {}",
+            frame.depth,
+            prog.bold(),
+            short_pid.dimmed(),
+            ix_name,
+            format_cu(frame.cu_consumed).bright_white(),
+        );
+        if !frame.children.is_empty() {
+            print_frames(&frame.children, _indent + 1);
+        }
+    }
+}
+
+fn abbrev(s: &str) -> String {
+    if s.len() > 10 {
+        format!("{}…{}", &s[..4], &s[s.len() - 4..])
+    } else {
+        s.to_string()
+    }
 }
 
 fn print_log_diff(mainnet: &[String], replay: &[String]) {
-    println!();
-    println!("{}", "Log diff (mainnet vs replay)".bold());
+    println!("{}", "Log diff (mainnet vs replay):".bold());
     let max = mainnet.len().max(replay.len());
     for i in 0..max {
         let m = mainnet.get(i).map(String::as_str).unwrap_or("<missing>");
@@ -210,16 +362,15 @@ fn print_log_diff(mainnet: &[String], replay: &[String]) {
     }
 }
 
-/// Format a u64 with underscore thousands separators: 842119 -> "842_119".
-fn format_underscores(n: u64) -> String {
+fn format_cu(n: u64) -> String {
     let s = n.to_string();
-    let bytes = s.as_bytes();
+    let b = s.as_bytes();
     let mut out = String::with_capacity(s.len() + s.len() / 3);
-    for (i, b) in bytes.iter().enumerate() {
-        if i > 0 && (bytes.len() - i) % 3 == 0 {
+    for (i, ch) in b.iter().enumerate() {
+        if i > 0 && (b.len() - i) % 3 == 0 {
             out.push('_');
         }
-        out.push(*b as char);
+        out.push(*ch as char);
     }
     out
 }

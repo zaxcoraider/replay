@@ -12,6 +12,7 @@ categories = ["development-tools", "api-bindings"]
 
 [dependencies]
 replay-core = { path = "../replay-core" }
+solana-sdk = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

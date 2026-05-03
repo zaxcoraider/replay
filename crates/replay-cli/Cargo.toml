@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 replay-core = { path = "../replay-core" }
+solana-sdk = { workspace = true }
 
 tokio = { workspace = true }
 clap = { workspace = true }
