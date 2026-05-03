@@ -30,8 +30,8 @@ export const DEMOS: Demo[] = [
     id: "jupiter-swap",
     title: "Jupiter v6 Swap",
     subtitle: "Mutate pool fee → watch route fail",
-    // Replace with a recent Jupiter v6 swap (program JUP6Lkb2abBUvo9pe2O5xFnTQHJJCfq1VYJqkZrSAH8)
-    signature: "FILL_ME_JUPITER_V6_SWAP_SIG",
+    // Jupiter v6 swap (program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4)
+    signature: "LowpTGnE4j4msHkGCVKwrKK6vxsziH2ciCBeYSm6dLv8GywVxfqHzYUznj1pzHvMLmprqz5kNuBfsHGKVhRkvs2",
     narrative:
       "A multi-hop Jupiter v6 swap through Whirlpool pools. Max out the pool fee_rate to 9999 and Re-run — the swap produces insufficient output and the entire transaction reverts.",
     tags: ["Jupiter", "Whirlpool", "DeFi"],
@@ -46,8 +46,8 @@ export const DEMOS: Demo[] = [
     id: "whirlpool-swap",
     title: "Whirlpool CLMM Swap",
     subtitle: "Drain pool liquidity → slippage failure",
-    // Replace with a recent Orca Whirlpool swap (program whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc)
-    signature: "FILL_ME_WHIRLPOOL_SWAP_SIG",
+    // Orca Whirlpool swap (program whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc)
+    signature: "2JCFCrQTrRF656UT6W5cHr9JQP4XDxsrCNtYB3P6NhFswcVMQMxKWhw6afsFswgL3bgGbTAa4wxd6gF6prfDz4Zp",
     narrative:
       "A concentrated liquidity swap on Orca Whirlpool. Zero out the pool liquidity and Re-run — the swap can't fill the order and fails with insufficient liquidity.",
     tags: ["Orca", "Whirlpool", "CLMM"],
@@ -62,8 +62,8 @@ export const DEMOS: Demo[] = [
     id: "drift-trade",
     title: "Drift Perp Trade",
     subtitle: "Crash oracle price → instant liquidation",
-    // Replace with a recent Drift v2 perp trade (program dRiftyHA3MooBbHFgJ5JecU3BHpHtYjDv8a9quSrm3e)
-    signature: "FILL_ME_DRIFT_PERP_TRADE_SIG",
+    // Drift v2 perp trade (program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH)
+    signature: "4EjzUEijQvZDrW5LbFmfjuEHDK7Q9P6fgpML6d1fd4uRjGNnKGCY82sGrVcqmNGWsGib1PBhu9tJRXRS9fpHzaag",
     narrative:
       "A Drift v2 perpetuals trade. Halve the oracle price for the base asset and Re-run — the position breaches its margin requirement and gets liquidated.",
     tags: ["Drift", "Perps", "Oracle"],
