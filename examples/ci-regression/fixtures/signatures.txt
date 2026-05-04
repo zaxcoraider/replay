@@ -1,0 +1,6 @@
+# Add one mainnet transaction signature per line.
+# Lines starting with # are ignored.
+#
+# Example (replace with real signatures from your protocol):
+# 5xYourFirstSignatureHere
+# 4zYourSecondSignatureHere

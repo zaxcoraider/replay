@@ -32,3 +32,5 @@ Each `day-XX.md` file should answer:
 - [`day-11.md`](day-11.md) — CLI polish: indicatif spinner, CPI frame table, `inspect` subcommand.
 - [`day-12.md`](day-12.md) — TypeScript SDK (`@zaxcoraider/replay-sdk`), published to npm.
 - [`day-13.md`](day-13.md) — Rust SDK (`replay-sdk`), docs site, published to npm + crates.io.
+- [`day-14.md`](day-14.md) — Helius LaserStream integration (SSE `/replay-live`, Live UI tab, blog draft).
+- [`day-15.md`](day-15.md) — Public-goods polish: README rewrite, CONTRIBUTING, CODE_OF_CONDUCT, .github/ CI+release workflows, examples/, grant writeup.
