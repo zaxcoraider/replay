@@ -4,15 +4,16 @@ Work down this list on Day 18. Check every box before you sleep.
 
 ## Repository
 
-- [ ] `README.md` at root with: project name, 1-paragraph pitch, animated GIF of the demo, install instructions, links to live demo + video + docs
-- [ ] `LICENSE` — MIT
-- [ ] `CONTRIBUTING.md`
-- [ ] `CODE_OF_CONDUCT.md` (Contributor Covenant, copy-paste)
-- [ ] `.github/workflows/ci.yml` — runs `cargo test` + `cargo clippy -- -D warnings` + frontend `pnpm test` + `pnpm build`
-- [ ] `.github/ISSUE_TEMPLATE/bug_report.md`
-- [ ] Git history cleaned up (no leaked keys, no giant binary commits). If history is messy, `git filter-repo` or squash to a few meaningful commits.
-- [ ] All `.env` files gitignored. Double-check no API keys in history.
-- [ ] Repo description and topics set on GitHub (`solana`, `debugger`, `developer-tools`, `rust`).
+- [x] `README.md` — rewritten Day 15 (banner, arch diagram, badges, clean pitch)
+- [x] `LICENSE` — MIT
+- [x] `CONTRIBUTING.md` — done Day 15
+- [x] `CODE_OF_CONDUCT.md` — done Day 15
+- [x] `.github/workflows/ci.yml` — done Day 15 (cargo check/clippy/test + pnpm tsc/build)
+- [x] `.github/ISSUE_TEMPLATE/bug_report.md` — done Day 15
+- [ ] Git history: no leaked keys — verify with `git log -p | grep HELIUS`
+- [ ] All `.env` files gitignored — **verify `.env` is in `.gitignore`**
+- [ ] Repo description and topics set on GitHub (`solana`, `debugger`, `developer-tools`, `rust`, `typescript`) — **do manually on github.com**
+- [ ] Repo pinned on GitHub profile — **do manually**
 
 ## Live deployment
 
@@ -25,10 +26,11 @@ Work down this list on Day 18. Check every box before you sleep.
 
 ## Packages
 
-- [ ] `replay-sdk` published to crates.io (version 0.1.0)
-- [ ] `@replay/sdk` published to npm (version 0.1.0)
-- [ ] `replay-cli` installable via `cargo install replay-cli` OR a `curl | sh` one-liner
-- [ ] Version numbers consistent across all packages
+- [x] `replay-sdk` published to crates.io (0.1.0) — done Day 13
+- [x] `replay-core` published to crates.io (0.1.0) — done Day 13
+- [x] `@zaxcoraider/replay-sdk` published to npm (0.1.0) — done Day 12
+- [ ] `replay-cli` installable via `cargo install replay-cli` — **verify this works from scratch**
+- [x] Version numbers consistent across all packages
 
 ## Videos
 
@@ -41,42 +43,48 @@ Work down this list on Day 18. Check every box before you sleep.
 
 ### Colosseum Frontier (main submission)
 - [ ] arena.colosseum.org submission form completed
-- [ ] Project name: **Replay**
-- [ ] One-liner: "Time-travel debugger for Solana transactions"
-- [ ] Repo link: ✓
-- [ ] Demo video link: ✓
-- [ ] Pitch video link: ✓
-- [ ] Live demo link: ✓
-- [ ] Submitted **Grand Champion** track (implicit — no track selection, judged on impact)
+- [ ] Writeup ready: `docs/submissions/colosseum-main.md`
+- [ ] Demo video link — **still needed (Day 17)**
+- [ ] Pitch video link — **still needed (Day 17)**
+- [ ] Live demo link: https://replay-weld.vercel.app ✓
 
 ### Public Goods track (Colosseum)
 - [ ] Separate form (or flag within Colosseum submission — verify)
-- [ ] Write-up explaining public-goods framing (200 words)
-- [ ] MIT license verified on repo
+- [x] Write-up ready: `docs/submissions/public-goods.md` (200 words)
+- [x] MIT license on repo ✓
 
 ### Helius side track (Superteam Earn)
-- [ ] earn.superteam.fun listing — submit
-- [ ] Write-up specifically calls out LaserStream integration with code snippets
-- [ ] Link to your Helius blog post draft
+- [ ] earn.superteam.fun — submit
+- [x] Writeup ready: `docs/submissions/helius-track.md`
+- [x] Blog draft ready: `docs/blog/time-travel-debugger-on-laserstream.md`
+- [ ] Send blog draft to Helius dev-rel (Discord DM — template in `docs/submissions/social-posts.md`)
 
 ### Glass Surfers Dev Tooling Grant
-- [ ] Grant form at earn.superteam.fun/grants/glass-surfers-dev-tooling-grants
-- [ ] Scope your ask at $5k for specific future work (e.g., VSCode extension)
+- [ ] Submit at earn.superteam.fun/grants/glass-surfers-dev-tooling-grants
+- [x] Application ready: `docs/grants/glass-surfers-application.md`
 
-### Regional Superteam track (yours)
-- [ ] Verify which track applies to your region
-- [ ] Separate submission there
+### Ackee / Security track (if running)
+- [x] Writeup ready: `docs/submissions/ackee-security.md` (500 words, Mango exploit)
+- [ ] Verify track is live on earn.superteam.fun, then submit
 
-### Any other tracks that went live during the hackathon
-- [ ] Final sweep of earn.superteam.fun filtered by `hackathon=frontier`
+### Regional Superteam track
+- [ ] Verify which track applies to your region on earn.superteam.fun
+- [ ] Submit with writeup from colosseum-main.md (adapt intro for region)
+
+### Any other tracks
+- [ ] Final sweep of earn.superteam.fun filtered by `hackathon=frontier` before Day 18
 
 ## Social + amplification
 
-- [ ] Launch tweet — video + one-liner + link. Tag @heliuslabs, @SolanaFndn, @SuperteamDAO.
-- [ ] Post in every Solana Discord you're in (OrcaDAO dev channel, Superteam, Anchor)
-- [ ] HackerNews Show HN post (Saturday morning US time performs best)
-- [ ] r/solana post
-- [ ] Drop into Colosseum's Telegram/Discord — these judges hang out there
+All drafts ready in `docs/submissions/social-posts.md`.
+
+- [ ] Launch tweet (+ thread) — template ready
+- [ ] Anchor Discord #dev-tools — template ready
+- [ ] OrcaDAO Discord #dev — template ready
+- [ ] Superteam Discord #hackathon — template ready
+- [ ] Helius Discord DM to dev-rel — template ready
+- [ ] r/solana post — template ready
+- [ ] HackerNews Show HN (Saturday morning US time performs best)
 
 ## Paper trail
 
