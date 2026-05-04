@@ -41,6 +41,7 @@ Thumbs.db
 /submissions/
 docs/progress/*.mp4
 docs/progress/*.mov
+docs/frontier_tracks.txt
 
 # Build artifacts we don't want checked in
 *.so
