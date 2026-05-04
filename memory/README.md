@@ -35,4 +35,4 @@ Each `day-XX.md` file should answer:
 - [`day-14.md`](day-14.md) — Helius LaserStream integration (SSE `/replay-live`, Live UI tab, blog draft).
 - [`day-15.md`](day-15.md) — Public-goods polish: README rewrite, CONTRIBUTING, CODE_OF_CONDUCT, .github/ CI+release workflows, examples/, grant writeup.
 - [`day-16.md`](day-16.md) — Side-track sweep: all submission writeups drafted, checklist updated, social templates ready.
-- [`day-17.md`](day-17.md) — Critical API fix (tower_governor ConnectInfo), port 8787→8080, keep-alive, full stack verified on prod.
+- [`day-17.md`](day-17.md) — Critical API fix (tower_governor ConnectInfo), port 8787→8080, keep-alive, full stack verified on prod. CI npm switch (pnpm workspace bug).

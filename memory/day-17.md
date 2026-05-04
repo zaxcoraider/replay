@@ -51,3 +51,16 @@ Day 17 prompt calls for:
 - Colosseum submission needs both video links
 
 Day 18 = final submission to all tracks before May 11 deadline.
+
+## CI fix (post Day 17, commit `cfa97c1`)
+
+pnpm v9 workspace detection failed in GitHub Actions:
+`ERR_PNPM_INVALID_WORKSPACE_CONFIGURATION packages field missing or empty`
+
+Three failed attempts (packageManager field, --no-frozen-lockfile, pnpm-workspace.yaml).
+**Final fix:** switched `.github/workflows/ci.yml` web job entirely to npm:
+- `npm install --legacy-peer-deps`
+- `npx tsc --noEmit`
+- `npm run build`
+
+Pushed. Awaiting green CI.
