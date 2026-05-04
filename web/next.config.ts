@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const API_URL =
   process.env.REPLAY_API_URL ??
   process.env.NEXT_PUBLIC_REPLAY_API_URL ??
-  "http://localhost:8787";
+  "http://localhost:8080";
 
 const nextConfig: NextConfig = {
   async rewrites() {
