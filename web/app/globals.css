@@ -128,3 +128,42 @@
     @apply font-sans;
   }
 }
+
+/* Solana brand tokens */
+:root {
+  --solana: #9945FF;
+  --solana-green: #14F195;
+}
+
+/* Grid background utility */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Radial hero glow */
+.bg-hero-glow {
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(153,69,255,0.13), transparent);
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.4s ease both;
+}
+
+/* Glowing focus ring for inputs */
+.focus-solana:focus-within {
+  box-shadow: 0 0 0 2px rgba(153,69,255,0.25);
+  border-color: rgba(153,69,255,0.5);
+}

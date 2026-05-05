@@ -188,59 +188,61 @@ export function DiffView({ diff }: Props) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Summary banner */}
-      <div className="px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60 shrink-0">
-        <div className="flex items-center gap-5 flex-wrap text-xs">
+      <div className="px-4 py-3 border-b border-zinc-800/60 bg-zinc-900/60 shrink-0">
+        <div className="flex items-center gap-6 flex-wrap">
           {/* Result */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-zinc-500 uppercase tracking-widest text-[10px]">Result</span>
-            <span className={baseOk ? "text-green-400" : "text-red-400"}>
-              {baseOk ? "✓" : "✗"}
-            </span>
-            <span className="text-zinc-600">→</span>
-            <span className={latestOk ? "text-green-400" : "text-red-400"}>
-              {latestOk ? "✓" : "✗"}
-            </span>
-            {result_changed && (
-              <Badge variant="destructive" className="text-[9px] ml-1">
-                CHANGED
-              </Badge>
-            )}
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest text-zinc-600">Result</span>
+            <div className="flex items-center gap-1.5 font-mono text-sm font-semibold">
+              <span className={baseOk ? "text-[#14F195]" : "text-red-400"}>{baseOk ? "✓" : "✗"}</span>
+              <span className="text-zinc-700 text-xs">→</span>
+              <span className={latestOk ? "text-[#14F195]" : "text-red-400"}>{latestOk ? "✓" : "✗"}</span>
+              {result_changed && (
+                <Badge variant="destructive" className="text-[9px] ml-1">CHANGED</Badge>
+              )}
+            </div>
           </div>
+
+          <div className="w-px h-8 bg-zinc-800" />
 
           {/* CU */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-zinc-500 uppercase tracking-widest text-[10px]">CU</span>
-            <span className="text-zinc-300 tabular-nums">
-              {baseline.total_cu.toLocaleString()}
-            </span>
-            <span className="text-zinc-600">→</span>
-            <span className="text-zinc-300 tabular-nums">
-              {latest.total_cu.toLocaleString()}
-            </span>
-            {total_cu_delta !== 0 && (
-              <span
-                className={`tabular-nums font-medium ${
-                  total_cu_delta > 0 ? "text-red-400" : "text-green-400"
-                }`}
-              >
-                ({total_cu_delta > 0 ? "+" : ""}
-                {cuPct.toFixed(1)}%)
-              </span>
-            )}
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest text-zinc-600">Compute units</span>
+            <div className="flex items-center gap-1.5 text-sm font-mono">
+              <span className="text-zinc-300 tabular-nums">{baseline.total_cu.toLocaleString()}</span>
+              <span className="text-zinc-700 text-xs">→</span>
+              <span className="text-zinc-300 tabular-nums">{latest.total_cu.toLocaleString()}</span>
+              {total_cu_delta !== 0 && (
+                <span
+                  className={`text-xs font-bold tabular-nums px-1.5 py-0.5 rounded ${
+                    total_cu_delta > 0
+                      ? "text-red-400 bg-red-500/10"
+                      : "text-[#14F195] bg-[#14F195]/10"
+                  }`}
+                >
+                  {total_cu_delta > 0 ? "+" : ""}{cuPct.toFixed(1)}%
+                </span>
+              )}
+            </div>
           </div>
 
+          <div className="w-px h-8 bg-zinc-800" />
+
           {/* Accounts */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-zinc-500 uppercase tracking-widest text-[10px]">Accounts</span>
-            <span className="text-zinc-300">{changed_accounts.length} changed</span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest text-zinc-600">Accounts</span>
+            <span className="text-sm font-semibold text-zinc-300">
+              {changed_accounts.length}{" "}
+              <span className="text-zinc-600 font-normal text-xs">changed</span>
+            </span>
           </div>
         </div>
       </div>
 
       {/* Column headers */}
-      <div className="grid grid-cols-2 gap-2 px-3 py-1.5 border-b border-zinc-800 bg-zinc-900/30 shrink-0">
-        <span className="text-[10px] uppercase tracking-widest text-zinc-500">Baseline</span>
-        <span className="text-[10px] uppercase tracking-widest text-zinc-500">Re-run</span>
+      <div className="grid grid-cols-2 gap-2 px-3 py-1.5 border-b border-zinc-800/60 bg-zinc-900/20 shrink-0">
+        <span className="text-[10px] uppercase tracking-widest text-zinc-600">Baseline</span>
+        <span className="text-[10px] uppercase tracking-widest text-zinc-600">Re-run</span>
       </div>
 
       <ScrollArea className="flex-1">
