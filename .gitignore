@@ -37,6 +37,10 @@ Thumbs.db
 !.vscode/settings.json.sample
 .claude/settings.local.json
 
+# Hackathon workflow files (local only)
+memory/
+prompts/
+
 # Hackathon workflow — don't commit screenshot bundles (top-level only)
 /submissions/
 docs/progress/*.mp4
