@@ -22,7 +22,8 @@ interface PageProps {
 }
 
 function ResultBadge({ trace }: { trace: Trace }) {
-  const ok = trace.replay_result.status === "success";
+  const ok = trace.mainnet_result.status === "success";
+  const replayDiverged = trace.replay_result.status !== trace.mainnet_result.status;
   return (
     <span
       className={[
@@ -31,6 +32,7 @@ function ResultBadge({ trace }: { trace: Trace }) {
           ? "bg-[#14F195]/10 text-[#14F195] border-[#14F195]/30"
           : "bg-red-500/10 text-red-400 border-red-500/30",
       ].join(" ")}
+      title={replayDiverged ? "Mainnet result. Replay simulation diverged." : undefined}
     >
       <span className={["w-1.5 h-1.5 rounded-full", ok ? "bg-[#14F195]" : "bg-red-400"].join(" ")} />
       {ok ? "Success" : "Failed"}
