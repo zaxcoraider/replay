@@ -10,8 +10,11 @@ export const metadata: Metadata = {
   title: "Replay — Solana time-travel debugger",
   description: "Replay any Solana transaction against exact historical state. Fork, mutate, re-run, diff.",
   icons: {
-    icon: [{ url: "/logo.png", type: "image/png" }],
-    apple: [{ url: "/logo.png" }],
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/logo.png", type: "image/png" },
+    ],
+    apple: "/logo.png",
   },
 };
 
