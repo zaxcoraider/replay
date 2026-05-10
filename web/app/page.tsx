@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { DEMOS, isPlaceholder } from "@/lib/demo-signatures";
 import { GitFork, Zap, Search, BarChart3, ArrowRight, Play } from "lucide-react";
@@ -35,6 +36,18 @@ export default function HomePage() {
 
       {/* Hero */}
       <div className="text-center space-y-5 w-full pt-4 animate-fade-up">
+        {/* Logo */}
+        <div className="flex justify-center">
+          <Image
+            src="/logo.png"
+            alt="Replay logo"
+            width={80}
+            height={80}
+            className="rounded-2xl"
+            priority
+          />
+        </div>
+
         {/* Eyebrow */}
         <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-zinc-500 bg-zinc-900/80 border border-zinc-800 rounded-full px-4 py-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-[#9945FF] animate-pulse" />
