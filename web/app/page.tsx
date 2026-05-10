@@ -38,14 +38,22 @@ export default function HomePage() {
       <div className="text-center space-y-5 w-full pt-4 animate-fade-up">
         {/* Logo */}
         <div className="flex justify-center">
-          <Image
-            src="/logo.png"
-            alt="Replay logo"
-            width={80}
-            height={80}
-            className="rounded-2xl"
-            priority
-          />
+          <div
+            className="relative flex items-center justify-center w-32 h-32 rounded-3xl"
+            style={{
+              background: "linear-gradient(135deg, #1a0533 0%, #0f0f1a 100%)",
+              boxShadow: "0 0 0 1px rgba(153,69,255,0.35), 0 0 48px rgba(153,69,255,0.25), 0 0 80px rgba(153,69,255,0.1)",
+            }}
+          >
+            <Image
+              src="/logo.png"
+              alt="Replay logo"
+              width={96}
+              height={96}
+              className="drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]"
+              priority
+            />
+          </div>
         </div>
 
         {/* Eyebrow */}
